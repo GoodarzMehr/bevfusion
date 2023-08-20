@@ -175,6 +175,7 @@ class BaseTransform(nn.Module):
         camera2lidar,
         img_aug_matrix,
         lidar_aug_matrix,
+        metas,
         **kwargs,
     ):
         rots = camera2ego[..., :3, :3]

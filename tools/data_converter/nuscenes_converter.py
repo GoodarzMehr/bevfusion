@@ -647,3 +647,7 @@ def generate_record(
     coco_rec["iscrowd"] = 0
 
     return coco_rec
+
+
+if __name__ == '__main__':
+    create_nuscenes_infos('data/nuscenes/', 'nuscenes', version='v1.0-trainval')
