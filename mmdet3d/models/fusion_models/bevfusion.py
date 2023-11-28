@@ -297,7 +297,7 @@ class BEVFusion(Base3DFusionModel):
                         outputs[k].update(
                             {
                                 "masks_bev": logits[k].cpu(),
-                                #"gt_masks_bev": gt_masks_bev[k].cpu(),
+                                "gt_masks_bev": gt_masks_bev[k].cpu(),
                             }
                         )
                 else:

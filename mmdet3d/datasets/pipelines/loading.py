@@ -309,6 +309,33 @@ class LoadBEVSegmentation:
 
 
 @PIPELINES.register_module()
+class LoadCarlaBEVSegmentation:
+    '''
+    Load BEV segmentation.
+    '''
+
+    def __init__(self):
+        pass
+
+    def __call__(self, data):
+        gt_path = data['gt_path']
+
+        mmcv.check_file_exist(gt_path)
+        
+        gt_masks = np.load(gt_path)
+
+        others = gt_masks.any(axis=0)
+        others = others[np.newaxis, ...]
+
+        gt_masks_aug = np.concatenate((gt_masks, others), axis=0)
+        gt_masks_aug = gt_masks_aug.astype(np.long)
+
+        data['gt_masks_bev'] = gt_masks_aug
+
+        return data
+
+
+@PIPELINES.register_module()
 class LoadPointsFromFile:
     """Load Points From File.
 
@@ -425,6 +452,36 @@ class LoadPointsFromFile:
             points, points_dim=points.shape[-1], attribute_dims=attribute_dims
         )
         results["points"] = points
+
+        return results
+
+
+@PIPELINES.register_module()
+class LoadCarlaPointsFromFile:
+    '''
+    Load Points From File.
+    '''
+
+    def __init__(self, coord_type):
+        self.coord_type = coord_type
+
+    def _load_points(self, lidar_path):
+        mmcv.check_file_exist(lidar_path)
+        
+        points = np.load(lidar_path)
+
+        return points
+
+    def __call__(self, results):
+        lidar_path = results['lidar_path']
+        
+        points = self._load_points(lidar_path)
+        
+        points_class = get_points_type(self.coord_type)
+        
+        points = points_class(points, points_dim=points.shape[-1], attribute_dims=None)
+        
+        results['points'] = points
 
         return results
 

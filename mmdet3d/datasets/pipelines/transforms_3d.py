@@ -156,6 +156,37 @@ class GlobalRotScaleTrans:
 
 
 @PIPELINES.register_module()
+class GlobalCarlaRotScaleTrans:
+    def __init__(self, resize_lim, rot_lim, trans_lim, is_train):
+        self.resize_lim = resize_lim
+        self.rot_lim = rot_lim
+        self.trans_lim = trans_lim
+        self.is_train = is_train
+
+    def __call__(self, data):
+        transform = np.eye(4).astype(np.float32)
+
+        if self.is_train:
+            scale = random.uniform(*self.resize_lim)
+            theta = random.uniform(*self.rot_lim)
+            
+            translation = np.array([random.normal(0, self.trans_lim) for i in range(3)])
+            rotation = np.eye(3)
+
+            if 'points' in data:
+                data['points'].rotate(-theta)
+                data['points'].translate(translation)
+                data['points'].scale(scale)
+
+            transform[:3, :3] = rotation.T * scale
+            transform[:3, 3] = translation * scale
+
+        data['lidar_aug_matrix'] = transform
+        
+        return data
+    
+
+@PIPELINES.register_module()
 class GridMask:
     def __init__(
         self,
