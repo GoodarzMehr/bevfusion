@@ -1,4 +1,0 @@
-{}
-{"mode": "train", "epoch": 1, "iter": 50, "lr": 0.0001, "memory": 8809, "data_time": 0.07397, "loss/map/road/focal": 0.13651, "loss/map/car/focal": 0.05777, "loss/map/truck/focal": 0.04986, "loss/map/pedestrian/focal": 0.03622, "loss/map/others/focal": 0.1403, "loss": 0.42065, "grad_norm": 2.14687, "time": 0.55857}
-{"mode": "train", "epoch": 1, "iter": 100, "lr": 0.0001, "memory": 8809, "data_time": 0.01152, "loss/map/road/focal": 0.11344, "loss/map/car/focal": 0.01602, "loss/map/truck/focal": 0.01067, "loss/map/pedestrian/focal": 0.00447, "loss/map/others/focal": 0.11349, "loss": 0.2581, "grad_norm": 1.13971, "time": 0.48331}
-{"mode": "train", "epoch": 1, "iter": 150, "lr": 0.0001, "memory": 8809, "data_time": 0.01167, "loss/map/road/focal": 0.11146, "loss/map/car/focal": 0.01407, "loss/map/truck/focal": 0.00822, "loss/map/pedestrian/focal": 0.00257, "loss/map/others/focal": 0.11063, "loss": 0.24695, "grad_norm": 0.90732, "time": 0.49275}
