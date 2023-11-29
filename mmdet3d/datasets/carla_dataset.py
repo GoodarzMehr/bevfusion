@@ -76,6 +76,17 @@ class CarlaDataset(Dataset):
 
         return class_names
     
+    def get_cat_ids(self, index):
+        info = self.data_infos[index]
+        gt_path = info['ground_truth']
+
+        mmcv.check_file_exist(gt_path)
+        
+        gt_masks = np.load(gt_path)
+        categories = gt_masks.any(axis=(1, 2))
+
+        return np.where(categories==True)[0].tolist()
+    
     def load_annotations(self, ann_file):
         annotations = mmcv.load(ann_file)
 

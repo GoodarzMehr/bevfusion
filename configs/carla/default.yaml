@@ -23,7 +23,6 @@ classes:
   - car
   - truck
   - pedestrian
-  - others
 
 input_modality:
   use_lidar: true
@@ -146,13 +145,15 @@ data:
   samples_per_gpu: 2
   workers_per_gpu: 4
   train:
-    type: ${dataset_type}
-    dataset_root: ${dataset_root}
-    ann_file: ${dataset_root + "infos/carla_infos_train.json"}
-    classes: ${classes}
-    pipeline: ${train_pipeline}
-    modality: ${input_modality}
-    test_mode: false
+    type: CBGSDataset
+    dataset:
+      type: ${dataset_type}
+      dataset_root: ${dataset_root}
+      ann_file: ${dataset_root + "infos/carla_infos_train.json"}
+      classes: ${classes}
+      pipeline: ${train_pipeline}
+      modality: ${input_modality}
+      test_mode: false
   val:
     type: ${dataset_type}
     dataset_root: ${dataset_root}

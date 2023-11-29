@@ -324,13 +324,7 @@ class LoadCarlaBEVSegmentation:
         
         gt_masks = np.load(gt_path)
 
-        others = gt_masks.any(axis=0)
-        others = others[np.newaxis, ...]
-
-        gt_masks_aug = np.concatenate((gt_masks, others), axis=0)
-        gt_masks_aug = gt_masks_aug.astype(np.long)
-
-        data['gt_masks_bev'] = gt_masks_aug
+        data['gt_masks_bev'] = gt_masks
 
         return data
 
