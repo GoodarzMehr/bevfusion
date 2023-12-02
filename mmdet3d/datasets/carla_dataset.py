@@ -193,7 +193,7 @@ class CarlaDataset(Dataset):
         return example
     
     def evaluate_map(self, results):
-        thresholds = torch.tensor([0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65])
+        thresholds = torch.tensor([0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65])
 
         num_classes = len(self.classes)
         num_thresholds = len(thresholds)
