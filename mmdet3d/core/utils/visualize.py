@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 
 from ..bbox import LiDARInstance3DBoxes
 
-__all__ = ["visualize_camera", "visualize_lidar", "visualize_map"]
+__all__ = ["visualize_camera", "visualize_lidar", "visualize_map", "visualize_map_carla"]
 
 
 OBJECT_PALETTE = {
@@ -37,6 +37,13 @@ MAP_PALETTE = {
     "road_divider": (202, 178, 214),
     "lane_divider": (106, 61, 154),
     "divider": (106, 61, 154),
+}
+
+CARLA_MAP_PALETTE = {
+    "road": (128, 64, 128),
+    "car": (0, 0, 142),
+    "truck": (107, 142, 35),
+    "pedestrian": (220, 20, 60)
 }
 
 
@@ -177,6 +184,26 @@ def visualize_map(
     for k, name in enumerate(classes):
         if name in MAP_PALETTE:
             canvas[masks[k], :] = MAP_PALETTE[name]
+    canvas = cv2.cvtColor(canvas, cv2.COLOR_RGB2BGR)
+
+    mmcv.mkdir_or_exist(os.path.dirname(fpath))
+    mmcv.imwrite(canvas, fpath)
+
+def visualize_map_carla(
+    fpath: str,
+    masks: np.ndarray,
+    *,
+    classes: List[str],
+    background: Tuple[int, int, int] = (240, 240, 240),
+) -> None:
+    assert masks.dtype == np.bool, masks.dtype
+
+    canvas = np.zeros((*masks.shape[-2:], 3), dtype=np.uint8)
+    canvas[:] = background
+
+    for k, name in enumerate(classes):
+        if name in CARLA_MAP_PALETTE:
+            canvas[masks[k], :] = CARLA_MAP_PALETTE[name]
     canvas = cv2.cvtColor(canvas, cv2.COLOR_RGB2BGR)
 
     mmcv.mkdir_or_exist(os.path.dirname(fpath))

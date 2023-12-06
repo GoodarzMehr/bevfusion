@@ -323,8 +323,9 @@ class LoadCarlaBEVSegmentation:
         mmcv.check_file_exist(gt_path)
         
         gt_masks = np.load(gt_path)
+        gt_masks = np.rot90(gt_masks, 2, axes=(2, 1))
 
-        data['gt_masks_bev'] = gt_masks
+        data['gt_masks_bev'] = gt_masks.copy()
 
         return data
 

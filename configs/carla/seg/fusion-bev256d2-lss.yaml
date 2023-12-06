@@ -109,7 +109,7 @@ model:
 
 optimizer:
   type: AdamW
-  lr: 3.0e-4
+  lr: 1.0e-4
   weight_decay: 0.01
   paramwise_cfg:
     custom_keys:

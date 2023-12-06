@@ -13,7 +13,7 @@ from torchpack.utils.config import configs
 from tqdm import tqdm
 
 from mmdet3d.core import LiDARInstance3DBoxes
-from mmdet3d.core.utils import visualize_camera, visualize_lidar, visualize_map
+from mmdet3d.core.utils import visualize_camera, visualize_lidar, visualize_map, visualize_map_carla
 from mmdet3d.datasets import build_dataloader, build_dataset
 from mmdet3d.models import build_model
 
@@ -40,9 +40,9 @@ def main() -> None:
 
     parser = argparse.ArgumentParser()
     parser.add_argument("config", metavar="FILE")
-    parser.add_argument("--mode", type=str, default="gt", choices=["gt", "pred"])
+    parser.add_argument("--mode", type=str, default="gt", choices=["gt", "pred", "gt-carla", "pred-carla"])
     parser.add_argument("--checkpoint", type=str, default=None)
-    parser.add_argument("--split", type=str, default="val", choices=["train", "val"])
+    parser.add_argument("--split", type=str, default="val", choices=["train", "val", "test"])
     parser.add_argument("--bbox-classes", nargs="+", type=int, default=None)
     parser.add_argument("--bbox-score", type=float, default=None)
     parser.add_argument("--map-score", type=float, default=0.5)
@@ -68,7 +68,7 @@ def main() -> None:
     )
 
     # build the model and load checkpoint
-    if args.mode == "pred":
+    if args.mode == "pred" or args.mode == "pred-carla":
         model = build_model(cfg.model)
         load_checkpoint(model, args.checkpoint, map_location="cpu")
 
@@ -81,13 +81,13 @@ def main() -> None:
 
     for data in tqdm(dataflow):
         metas = data["metas"].data[0][0]
-        name = "{}-{}".format(metas["timestamp"], metas["token"])
+        name = "{}-SimBEV".format(metas["timestamp"])
 
-        if args.mode == "pred":
+        if args.mode == "pred" or args.mode == "pred-carla":
             with torch.inference_mode():
                 outputs = model(**data)
 
-        if args.mode == "gt" and "gt_bboxes_3d" in data:
+        if (args.mode == "gt" or args.mode == "gt-carla") and "gt_bboxes_3d" in data:
             bboxes = data["gt_bboxes_3d"].data[0][0].tensor.numpy()
             labels = data["gt_labels_3d"].data[0][0].numpy()
 
@@ -121,12 +121,14 @@ def main() -> None:
             bboxes = None
             labels = None
 
-        if args.mode == "gt" and "gt_masks_bev" in data:
+        if (args.mode == "gt" or args.mode == "gt-carla") and "gt_masks_bev" in data:
             masks = data["gt_masks_bev"].data[0].numpy()
-            masks = masks.astype(np.bool)
-        elif args.mode == "pred" and "masks_bev" in outputs[0]:
+            masks = np.rot90(masks, 2, axes=(1, 2))
+            masks = masks.copy().astype(np.bool)
+        elif (args.mode == "pred" or args.mode == "pred-carla") and "masks_bev" in outputs[0]:
             masks = outputs[0]["masks_bev"].numpy()
-            masks = masks >= args.map_score
+            masks = np.rot90(masks, 2, axes=(1, 2))
+            masks = masks.copy() >= args.map_score
         else:
             masks = None
 
@@ -139,7 +141,7 @@ def main() -> None:
                     bboxes=bboxes,
                     labels=labels,
                     transform=metas["lidar2image"][k],
-                    classes=cfg.object_classes,
+                    classes=cfg.classes,
                 )
 
         if "points" in data:
@@ -151,15 +153,22 @@ def main() -> None:
                 labels=labels,
                 xlim=[cfg.point_cloud_range[d] for d in [0, 3]],
                 ylim=[cfg.point_cloud_range[d] for d in [1, 4]],
-                classes=cfg.object_classes,
+                classes=cfg.classes,
             )
 
         if masks is not None:
-            visualize_map(
-                os.path.join(args.out_dir, "map", f"{name}.png"),
-                masks,
-                classes=cfg.map_classes,
-            )
+            if args.mode == "gt" or args.mode == "pred":
+                visualize_map(
+                    os.path.join(args.out_dir, "map", f"{name}.png"),
+                    masks,
+                    classes=cfg.map_classes,
+                )
+            elif args.mode == "gt-carla" or args.mode == "pred-carla":
+                visualize_map_carla(
+                    os.path.join(args.out_dir, "map", f"{name}.png"),
+                    masks,
+                    classes=cfg.classes,
+                )
 
 
 if __name__ == "__main__":
