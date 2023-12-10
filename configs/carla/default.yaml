@@ -12,11 +12,6 @@ augment2d:
     prob: 0.0
     fixed_prob: true
 
-augment3d:
-  scale: [0.9, 1.1]
-  rotate: [-0.78539816, 0.78539816]
-  translate: 0.5
-
 classes:
   - road
   - car

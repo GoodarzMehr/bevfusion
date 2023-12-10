@@ -40,7 +40,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser()
     parser.add_argument("config", metavar="FILE")
-    parser.add_argument("--mode", type=str, default="gt", choices=["gt", "pred", "gt-carla", "pred-carla"])
+    parser.add_argument("--mode", type=str, default="gt", choices=["gt", "pred", "carla"])
     parser.add_argument("--checkpoint", type=str, default=None)
     parser.add_argument("--split", type=str, default="val", choices=["train", "val", "test"])
     parser.add_argument("--bbox-classes", nargs="+", type=int, default=None)
@@ -61,14 +61,14 @@ def main() -> None:
     dataset = build_dataset(cfg.data[args.split])
     dataflow = build_dataloader(
         dataset,
-        samples_per_gpu=1,
+        samples_per_gpu=2,
         workers_per_gpu=cfg.data.workers_per_gpu,
         dist=True,
         shuffle=False,
     )
 
     # build the model and load checkpoint
-    if args.mode == "pred" or args.mode == "pred-carla":
+    if args.mode == "pred" or args.mode == "carla":
         model = build_model(cfg.model)
         load_checkpoint(model, args.checkpoint, map_location="cpu")
 
@@ -83,11 +83,11 @@ def main() -> None:
         metas = data["metas"].data[0][0]
         name = "{}-SimBEV".format(metas["timestamp"])
 
-        if args.mode == "pred" or args.mode == "pred-carla":
+        if args.mode == "pred" or args.mode == "carla":
             with torch.inference_mode():
                 outputs = model(**data)
 
-        if (args.mode == "gt" or args.mode == "gt-carla") and "gt_bboxes_3d" in data:
+        if args.mode == "gt" and "gt_bboxes_3d" in data:
             bboxes = data["gt_bboxes_3d"].data[0][0].tensor.numpy()
             labels = data["gt_labels_3d"].data[0][0].numpy()
 
@@ -121,53 +121,64 @@ def main() -> None:
             bboxes = None
             labels = None
 
-        if (args.mode == "gt" or args.mode == "gt-carla") and "gt_masks_bev" in data:
+        if args.mode == "gt" and "gt_masks_bev" in data:
             masks = data["gt_masks_bev"].data[0].numpy()
-            masks = np.rot90(masks, 2, axes=(1, 2))
-            masks = masks.copy().astype(np.bool)
-        elif (args.mode == "pred" or args.mode == "pred-carla") and "masks_bev" in outputs[0]:
+            masks = masks.astype(np.bool)
+        elif args.mode == "pred" and "masks_bev" in outputs[0]:
             masks = outputs[0]["masks_bev"].numpy()
-            masks = np.rot90(masks, 2, axes=(1, 2))
-            masks = masks.copy() >= args.map_score
+            masks = masks >= args.map_score
+        elif args.mode == "carla" and "gt_masks_bev" in data and "masks_bev" in outputs[0]:
+            gt_masks = data["gt_masks_bev"].data[0].numpy()
+            gt_masks = np.rot90(gt_masks, 2, axes=(1, 2))
+            gt_masks = gt_masks.astype(np.bool)
+
+            pred_masks = outputs[0]["masks_bev"].numpy()
+            pred_masks = np.rot90(pred_masks, 2, axes=(1, 2))
+            pred_masks = pred_masks >= args.map_score
         else:
             masks = None
 
-        if "img" in data:
-            for k, image_path in enumerate(metas["filename"]):
-                image = mmcv.imread(image_path)
-                visualize_camera(
-                    os.path.join(args.out_dir, f"camera-{k}", f"{name}.png"),
-                    image,
-                    bboxes=bboxes,
-                    labels=labels,
-                    transform=metas["lidar2image"][k],
+        if args.mode == "carla":
+            visualize_map_carla(
+                    os.path.join(args.out_dir, "gt", f"{name}.jpg"),
+                    gt_masks,
                     classes=cfg.classes,
                 )
+            visualize_map_carla(
+                    os.path.join(args.out_dir, "pred", f"{name}.jpg"),
+                    pred_masks,
+                    classes=cfg.classes,
+                )
+        else:
+            if "img" in data:
+                for k, image_path in enumerate(metas["filename"]):
+                    image = mmcv.imread(image_path)
+                    visualize_camera(
+                        os.path.join(args.out_dir, f"camera-{k}", f"{name}.png"),
+                        image,
+                        bboxes=bboxes,
+                        labels=labels,
+                        transform=metas["lidar2image"][k],
+                        classes=cfg.object_classes,
+                    )
 
-        if "points" in data:
-            lidar = data["points"].data[0][0].numpy()
-            visualize_lidar(
-                os.path.join(args.out_dir, "lidar", f"{name}.png"),
-                lidar,
-                bboxes=bboxes,
-                labels=labels,
-                xlim=[cfg.point_cloud_range[d] for d in [0, 3]],
-                ylim=[cfg.point_cloud_range[d] for d in [1, 4]],
-                classes=cfg.classes,
-            )
+            if "points" in data:
+                lidar = data["points"].data[0][0].numpy()
+                visualize_lidar(
+                    os.path.join(args.out_dir, "lidar", f"{name}.png"),
+                    lidar,
+                    bboxes=bboxes,
+                    labels=labels,
+                    xlim=[cfg.point_cloud_range[d] for d in [0, 3]],
+                    ylim=[cfg.point_cloud_range[d] for d in [1, 4]],
+                    classes=cfg.object_classes,
+                )
 
-        if masks is not None:
-            if args.mode == "gt" or args.mode == "pred":
+            if masks is not None:
                 visualize_map(
                     os.path.join(args.out_dir, "map", f"{name}.png"),
                     masks,
                     classes=cfg.map_classes,
-                )
-            elif args.mode == "gt-carla" or args.mode == "pred-carla":
-                visualize_map_carla(
-                    os.path.join(args.out_dir, "map", f"{name}.png"),
-                    masks,
-                    classes=cfg.classes,
                 )
 
 

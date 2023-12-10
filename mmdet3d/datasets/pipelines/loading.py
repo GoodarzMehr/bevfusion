@@ -311,7 +311,12 @@ class LoadBEVSegmentation:
 @PIPELINES.register_module()
 class LoadCarlaBEVSegmentation:
     '''
-    Load BEV segmentation.
+    Loads CARLA BEV segmentation masks.
+
+    Attributes:
+
+    Methods:
+
     '''
 
     def __init__(self):
@@ -454,7 +459,13 @@ class LoadPointsFromFile:
 @PIPELINES.register_module()
 class LoadCarlaPointsFromFile:
     '''
-    Load Points From File.
+    Loads lidar point cloud from binary file.
+
+    Attributes:
+        - coord_type: coordinate type of the data.
+
+    Methods:
+        - _load_points: loads point cloud data from binary file.
     '''
 
     def __init__(self, coord_type):

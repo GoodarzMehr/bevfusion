@@ -40,9 +40,9 @@ MAP_PALETTE = {
 }
 
 CARLA_MAP_PALETTE = {
-    "road": (128, 64, 128),
-    "car": (0, 0, 142),
-    "truck": (107, 142, 35),
+    "road": (200, 32, 200),
+    "car": (16, 64, 240),
+    "truck": (64, 200, 64),
     "pedestrian": (220, 20, 60)
 }
 

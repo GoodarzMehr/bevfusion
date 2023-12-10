@@ -18,7 +18,38 @@ CAM_NAME = ['CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT',
 @DATASETS.register_module()
 class CarlaDataset(Dataset):
     '''
-    Carla Dataset
+    This class serves as the API for experiments on a CARLA dataset generated
+    using SimBEV.
+
+    Attributes:
+        - dataset_root: root directory of the dataset.
+        - ann_file: annotation file of the dataset.
+        - classes: dataset map classes.
+        - modality: modality of the dataset.
+        - test_mode: whether the dataset is used for training or testing.
+        - load_interval: interval of data samples.
+        - CLASSES: dataset map class names.
+        - data_infos: dataset annotation information.
+        - pipeline: data augmentation pipeline.
+        - epoch: current epoch.
+        - metadata: dataset metadata (sensor coordinate transformations).
+        - flag: flag for data grouping.
+
+    Methods:
+        - set_epoch: set current epoch.
+        - get_classes: get dataset map class names.
+        - get_cat_ids: get class IDs present in a data sample.
+        - load_annotations: load dataset annotations.
+        - get_data_info: generate meta information for a data sample.
+        - prepare_train_data: process a data sample through the augmentation
+            pipeline for training.
+        - prepare_test_data: process a data sample through the augmentation
+            pipeline for testing.
+        - evaluate_map: calculate intersection over union (IoU) for each class
+            using different thresholds.
+        - evaluate: evaluate model performance.
+        - _set_group_flag: set flag for data grouping.
+        - _rand_another: get another data sample with the same flag.
     '''
 
     def __init__(
@@ -47,7 +78,7 @@ class CarlaDataset(Dataset):
             self.pipeline = Compose(pipeline)
 
         if self.modality is None:
-            self.modality = dict(use_camera=False, use_lidar=True)
+            self.modality = dict(use_camera=True, use_lidar=True)
 
         if not self.test_mode:
             self._set_group_flag()
@@ -93,7 +124,7 @@ class CarlaDataset(Dataset):
         data_infos = annotations['data']
         data_infos = data_infos[:: self.load_interval]
 
-        self.metadata = annotations["metadata"]
+        self.metadata = annotations['metadata']
 
         return data_infos
     

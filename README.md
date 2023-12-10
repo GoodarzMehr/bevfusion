@@ -1,22 +1,6 @@
-# BEVFusion
+# BEVFusion in CARLA
 
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/bevfusion-multi-task-multi-sensor-fusion-with/3d-object-detection-on-nuscenes)](https://paperswithcode.com/sota/3d-object-detection-on-nuscenes?p=bevfusion-multi-task-multi-sensor-fusion-with)
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/bevfusion-multi-task-multi-sensor-fusion-with/3d-multi-object-tracking-on-nuscenes)](https://paperswithcode.com/sota/3d-multi-object-tracking-on-nuscenes?p=bevfusion-multi-task-multi-sensor-fusion-with)
-
-### [website](http://bevfusion.mit.edu/) | [paper](https://arxiv.org/abs/2205.13542) | [video](https://www.youtube.com/watch?v=uCAka90si9E)
-
-![demo](assets/demo.gif)
-
-## News
-
-**If you are interested in getting updates, please sign up [here](https://docs.google.com/forms/d/e/1FAIpQLSfkmfsX45HstL5rUQlS7xJthhS3Z_Pm2NOVstlXUqgaK4DEfQ/viewform) to get notified!**
-
-- **(2023/1/16)** BEVFusion is accepted to ICRA 2023!
-- **(2022/8/16)** BEVFusion ranks first on [Waymo](https://waymo.com/open/challenges/2020/3d-detection/) 3D object detection leaderboard among all solutions.
-- **(2022/6/3)** BEVFusion ranks first on [nuScenes](https://nuscenes.org/object-detection?externalData=all&mapData=all&modalities=Any) among all solutions.
-- **(2022/6/3)** We released the first version of BEVFusion (with pre-trained checkpoints and evaluation).
-- **(2022/5/26)** BEVFusion is released on [arXiv](https://arxiv.org/abs/2205.13542).
-- **(2022/5/2)** BEVFusion ranks first on [nuScenes](https://nuscenes.org/object-detection?externalData=all&mapData=all&modalities=Any) among all solutions that do not use test-time augmentation and model ensemble.
+![demo](assets/carla-demo.gif)
 
 ## Abstract
 
@@ -24,36 +8,7 @@ Multi-sensor fusion is essential for an accurate and reliable autonomous driving
 
 ## Results
 
-### 3D Object Detection (on Waymo test)
-
-|   Model   | mAP-L1 | mAPH-L1  | mAP-L2  | mAPH-L2  |
-| :-------: | :------: | :--: | :--: | :--: |
-| [BEVFusion](https://waymo.com/open/challenges/entry/?challenge=DETECTION_3D&challengeId=DETECTION_3D&emailId=f58eed96-8bb3&timestamp=1658347965704580) |    82.72   |  81.35  | 77.65  |  76.33 |
-| [BEVFusion-TTA](https://waymo.com/open/challenges/entry/?challenge=DETECTION_3D&challengeId=DETECTION_3D&emailId=94ddc185-d2ce&timestamp=1663562767759105) | 86.04    |  84.76 | 81.22  |  79.97 |
-
-Here, BEVFusion only uses a single model without any test time augmentation. BEVFusion-TTA uses single model with test-time augmentation and no model ensembling is applied. 
-
-### 3D Object Detection (on nuScenes test)
-
-|   Model   | Modality | mAP  | NDS  |
-| :-------: | :------: | :--: | :--: |
-| BEVFusion-e |   C+L    | 74.99 | 76.09 |
-| BEVFusion |   C+L    | 70.23 | 72.88 |
-| BEVFusion-base* |   C+L    | 71.72 | 73.83 |
-
-*: We scaled up MACs of the model to match the computation cost of concurrent work.
-
-### 3D Object Detection (on nuScenes validation)
-
-|        Model         | Modality | mAP  | NDS  | Checkpoint  |
-| :------------------: | :------: | :--: | :--: | :---------: |
-|    [BEVFusion](configs/nuscenes/det/transfusion/secfpn/camera+lidar/swint_v0p075/convfuser.yaml)       |   C+L    | 68.52 | 71.38 | [Link](https://bevfusion.mit.edu/files/pretrained_updated/bevfusion-det.pth) |
-| [Camera-Only Baseline](configs/nuscenes/det/centerhead/lssfpn/camera/256x704/swint/default.yaml) |    C     | 35.56 | 41.21 | [Link](https://bevfusion.mit.edu/files/pretrained_updated/camera-only-det.pth) |
-| [LiDAR-Only Baseline](configs/nuscenes/det/transfusion/secfpn/lidar/voxelnet_0p075.yaml)  |    L     | 64.68 | 69.28 | [Link](https://bevfusion.mit.edu/files/pretrained/lidar-only-det.pth) |
-
-*Note*: The camera-only object detection baseline is a variant of BEVDet-Tiny with a much heavier view transformer and other differences in hyperparameters. Thanks to our [efficient BEV pooling](mmdet3d/ops/bev_pool) operator, this model runs fast and has higher mAP than BEVDet-Tiny under the same input resolution. Please refer to [BEVDet repo](https://github.com/HuangJunjie2017/BEVDet) for the original BEVDet-Tiny implementation. The LiDAR-only baseline is TransFusion-L.
-
-### BEV Map Segmentation (on nuScenes validation)
+### BEV Map Segmentation (on nuSce)
 
 |        Model         | Modality | mIoU | Checkpoint  |
 | :------------------: | :------: | :--: | :---------: |
