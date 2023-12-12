@@ -78,7 +78,7 @@ The commands above train, test, and visualize the lidar-camera model. For camera
 
 ## Results
 
-The following table shows the IoU values of the camera-lidar model for different classes at three different thresholds.
+The following table shows the IoU values of the lidar-camera model for different classes at three different thresholds.
 
 | Threshold | Road | Car | Truck | Pedestrian |
 | :-------: | :--: | :-: | :---: | :--------: |
