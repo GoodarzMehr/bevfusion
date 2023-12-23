@@ -173,10 +173,10 @@ class CarlaDataset(Dataset):
                 data['camera_intrinsics'].append(camera_intrinsics)
                 
                 # Lidar to camera transformation.
+                lidar2camera_rt = np.eye(4).astype(np.float32)
+
                 lidar2camera_r = np.linalg.inv(Q(self.metadata[camera]['sensor2lidar_rotation']).rotation_matrix)
                 lidar2camera_t = self.metadata[camera]['sensor2lidar_translation'] @ lidar2camera_r.T
-                
-                lidar2camera_rt = np.eye(4).astype(np.float32)
                 
                 lidar2camera_rt[:3, :3] = lidar2camera_r.T
                 lidar2camera_rt[3, :3] = -lidar2camera_t
