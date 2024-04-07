@@ -19,37 +19,37 @@ CAM_NAME = ['CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT',
 class CarlaDataset(Dataset):
     '''
     This class serves as the API for experiments on a CARLA dataset generated
-    using SimBEV.
+    by SimBEV.
 
     Attributes:
-        - dataset_root: root directory of the dataset.
-        - ann_file: annotation file of the dataset.
-        - classes: dataset map classes.
-        - modality: modality of the dataset.
-        - test_mode: whether the dataset is used for training or testing.
-        - load_interval: interval of data samples.
-        - CLASSES: dataset map class names.
-        - data_infos: dataset annotation information.
-        - pipeline: data augmentation pipeline.
-        - epoch: current epoch.
-        - metadata: dataset metadata (sensor coordinate transformations).
-        - flag: flag for data grouping.
+        dataset_root: root directory of the dataset.
+        ann_file: annotation file of the dataset.
+        classes: dataset map classes.
+        modality: modality of the dataset.
+        test_mode: whether the dataset is used for training or testing.
+        load_interval: interval of data samples.
+        CLASSES: dataset map class names.
+        data_infos: dataset annotation information.
+        pipeline: data augmentation pipeline.
+        epoch: current epoch.
+        metadata: dataset metadata (sensor coordinate transformations).
+        flag: flag for data grouping.
 
     Methods:
-        - set_epoch: set current epoch.
-        - get_classes: get dataset map class names.
-        - get_cat_ids: get class IDs present in a data sample.
-        - load_annotations: load dataset annotations.
-        - get_data_info: generate meta information for a data sample.
-        - prepare_train_data: process a data sample through the augmentation
+        set_epoch: set current epoch.
+        get_classes: get dataset map class names.
+        get_cat_ids: get class IDs present in a data sample.
+        load_annotations: load dataset annotations.
+        get_data_info: generate meta information for a data sample.
+        prepare_train_data: process a data sample through the augmentation
             pipeline for training.
-        - prepare_test_data: process a data sample through the augmentation
+        prepare_test_data: process a data sample through the augmentation
             pipeline for testing.
-        - evaluate_map: calculate intersection over union (IoU) for each class
+        evaluate_map: calculate intersection over union (IoU) for each class
             using different thresholds.
-        - evaluate: evaluate model performance.
-        - _set_group_flag: set flag for data grouping.
-        - _rand_another: get another data sample with the same flag.
+        evaluate: evaluate model performance.
+        _set_group_flag: set flag for data grouping.
+        _rand_another: get another data sample with the same flag.
     '''
 
     def __init__(
@@ -60,7 +60,7 @@ class CarlaDataset(Dataset):
         pipeline=None,
         modality=None,
         test_mode=False,
-        load_interval=1,
+        load_interval=4,
     ):
         super().__init__()
         self.dataset_root = dataset_root
@@ -109,19 +109,36 @@ class CarlaDataset(Dataset):
     
     def get_cat_ids(self, index):
         info = self.data_infos[index]
-        gt_path = info['ground_truth']
+        gt_path = info['GT_SEG']
 
         mmcv.check_file_exist(gt_path)
         
         gt_masks = np.load(gt_path)
-        categories = gt_masks.any(axis=(1, 2))
 
-        return np.where(categories==True)[0].tolist()
+        car_mask = gt_masks[1]
+        truck_mask = np.logical_or(gt_masks[2], gt_masks[3])
+        cyclist_mask = np.logical_or(gt_masks[4], gt_masks[5], gt_masks[6])
+        pedestrian_mask = gt_masks[7]
+
+        road_mask = np.logical_and(
+            gt_masks[0],
+            np.logical_not(np.logical_or.reduce((car_mask, truck_mask, cyclist_mask, pedestrian_mask)))
+        )
+
+        gt_mask = np.array([road_mask, car_mask, truck_mask, cyclist_mask, pedestrian_mask])
+
+        categories = gt_mask.any(axis=(1, 2))
+
+        return np.where(categories == True)[0].tolist()
     
     def load_annotations(self, ann_file):
         annotations = mmcv.load(ann_file)
 
-        data_infos = annotations['data']
+        data_infos = []
+
+        for key in annotations['data']:
+            data_infos += annotations['data'][key]['scene_data']
+
         data_infos = data_infos[:: self.load_interval]
 
         self.metadata = annotations['metadata']
@@ -132,10 +149,9 @@ class CarlaDataset(Dataset):
         info = self.data_infos[index]
 
         data = dict(
-            location = self.metadata['location'],
             timestamp = info['timestamp'],
-            gt_path = info['ground_truth'],
-            lidar_path = info['LIDAR_TOP']
+            gt_path = info['GT_SEG'],
+            lidar_path = info['LIDAR']
         )
 
         # Ego to global transformation.
@@ -149,8 +165,8 @@ class CarlaDataset(Dataset):
         # Lidar to ego transformation.
         lidar2ego = np.eye(4).astype(np.float32)
         
-        lidar2ego[:3, :3] = Q(self.metadata['LIDAR_TOP']['sensor2ego_rotation']).rotation_matrix
-        lidar2ego[:3, 3] = self.metadata['LIDAR_TOP']['sensor2ego_translation']
+        lidar2ego[:3, :3] = Q(self.metadata['LIDAR']['sensor2ego_rotation']).rotation_matrix
+        lidar2ego[:3, 3] = self.metadata['LIDAR']['sensor2ego_translation']
         
         data['lidar2ego'] = lidar2ego
 
@@ -183,12 +199,12 @@ class CarlaDataset(Dataset):
                 
                 data['lidar2camera'].append(lidar2camera_rt.T)
 
-                # Lidar to image transformation,
+                # Lidar to image transformation.
                 lidar2image = camera_intrinsics @ lidar2camera_rt.T
 
                 data['lidar2image'].append(lidar2image)
 
-                # Camera to ego transformation,
+                # Camera to ego transformation.
                 camera2ego = np.eye(4).astype(np.float32)
 
                 camera2ego[:3, :3] = Q(self.metadata[camera]['sensor2ego_rotation']).rotation_matrix
@@ -224,7 +240,7 @@ class CarlaDataset(Dataset):
         return example
     
     def evaluate_map(self, results):
-        thresholds = torch.tensor([0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7])
+        thresholds = torch.tensor([0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9])
 
         num_classes = len(self.classes)
         num_thresholds = len(thresholds)

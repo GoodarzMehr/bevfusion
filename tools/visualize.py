@@ -81,7 +81,11 @@ def main() -> None:
 
     for data in tqdm(dataflow):
         metas = data["metas"].data[0][0]
-        name = "{}-SimBEV".format(metas["timestamp"])
+
+        if args.mode == "carla":
+            name = "{}-SimBEV".format(metas["timestamp"])
+        else:
+            name = "{}-{}".format(metas["timestamp"], metas["token"])
 
         if args.mode == "pred" or args.mode == "carla":
             with torch.inference_mode():

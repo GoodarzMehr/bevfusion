@@ -16,6 +16,7 @@ classes:
   - road
   - car
   - truck
+  - cyclist
   - pedestrian
 
 input_modality:
@@ -135,7 +136,7 @@ test_pipeline:
       - img_aug_matrix
       - lidar_aug_matrix
 
-carla_pipeline:
+pcmf_pipeline:
   -
     type: ImageAug3D
     final_dim: ${image_size}

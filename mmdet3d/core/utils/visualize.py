@@ -43,7 +43,8 @@ CARLA_MAP_PALETTE = {
     "road": (200, 32, 200),
     "car": (16, 64, 240),
     "truck": (64, 200, 64),
-    "pedestrian": (220, 20, 60)
+    "cyclist": (240, 220, 20),
+    "pedestrian": (240, 4, 4)
 }
 
 
@@ -204,6 +205,7 @@ def visualize_map_carla(
     for k, name in enumerate(classes):
         if name in CARLA_MAP_PALETTE:
             canvas[masks[k], :] = CARLA_MAP_PALETTE[name]
+    
     canvas = cv2.cvtColor(canvas, cv2.COLOR_RGB2BGR)
 
     mmcv.mkdir_or_exist(os.path.dirname(fpath))
