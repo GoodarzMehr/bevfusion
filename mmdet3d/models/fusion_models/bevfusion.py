@@ -289,6 +289,8 @@ class BEVFusion(Base3DFusionModel):
                                 "boxes_3d": boxes.to("cpu"),
                                 "scores_3d": scores.cpu(),
                                 "labels_3d": labels.cpu(),
+                                "gt_bboxes_3d": gt_bboxes_3d[0].to("cpu"),
+                                "gt_labels_3d": gt_labels_3d[0].cpu()
                             }
                         )
                 elif type == "map":

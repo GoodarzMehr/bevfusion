@@ -2,7 +2,9 @@ import os
 from typing import Any, Dict, Tuple
 
 import mmcv
+import torch
 import numpy as np
+import torch.nn.functional as F
 from nuscenes.map_expansion.map_api import NuScenesMap
 from nuscenes.map_expansion.map_api import locations as LOCATIONS
 from PIL import Image
@@ -309,40 +311,113 @@ class LoadBEVSegmentation:
 
 
 @PIPELINES.register_module()
-class LoadCarlaBEVSegmentation:
+class LoadSimBEVBEVSegmentation:
     '''
-    Loads CARLA BEV segmentation masks.
+    Load SimBEV BEV segmentation masks.
 
-    Attributes:
-
-    Methods:
-
+    Args:
+        bev_res_x: BEV grid cell length along the x axis.
+        bev_dim_x: BEV grid dimension along the x axis.
+        bev_res_y: BEV grid cell length along the y axis.
+        bev_dim_y: BEV grid dimension along the y axis.
+        dType: data type to use for calculations.
     '''
 
-    def __init__(self):
-        pass
+    def __init__(self, bev_res_x, bev_dim_x, bev_res_y=None, bev_dim_y=None, dType=torch.float):
+        if bev_res_y is None:
+            bev_res_y = bev_res_x
+        
+        if bev_dim_y is None:
+            bev_dim_y = bev_dim_x
+        
+        self.xRes = bev_res_x
+        self.yRes = bev_res_y
+        
+        self.DxDim = bev_dim_x
+        self.DyDim = bev_dim_y
+        
+        self.dType = dType
 
     def __call__(self, data):
-        gt_path = data['gt_path']
+        # Load BEV ground truth.
+        gt_seg_path = data['gt_seg_path']
 
-        mmcv.check_file_exist(gt_path)
+        mmcv.check_file_exist(gt_seg_path)
+
+        if gt_seg_path.endswith('.npz'):
+            gt_masks = np.load(gt_seg_path)['data']
+        else:
+            gt_masks = np.load(gt_seg_path)
         
-        gt_masks = np.load(gt_path)
-        gt_masks = np.rot90(gt_masks, 2, axes=(2, 1))
+        gt_masks = np.rot90(gt_masks, 2, axes=(2, 1)).copy()
 
-        car_mask = gt_masks[1]
-        truck_mask = np.logical_or(gt_masks[2], gt_masks[3])
-        cyclist_mask = np.logical_or(gt_masks[4], gt_masks[5], gt_masks[6])
-        pedestrian_mask = gt_masks[7]
+        gt_masks = torch.from_numpy(gt_masks).to(self.dType)
+        
+        # Calculate transformation matrix.
+        lidar2point = data['lidar_aug_matrix']
 
-        road_mask = np.logical_and(
-            gt_masks[0],
-            np.logical_not(np.logical_or.reduce((car_mask, truck_mask, cyclist_mask, pedestrian_mask)))
-        )
+        lidar2point[:3, :3] = lidar2point[:3, :3].T
 
-        gt_mask = np.array([road_mask, car_mask, truck_mask, cyclist_mask, pedestrian_mask])
+        point2lidar = np.linalg.inv(lidar2point)
 
-        data['gt_masks_bev'] = gt_mask.copy()
+        lidar2ego = data['lidar2ego']
+
+        point2ego = lidar2ego @ point2lidar
+
+        R = torch.tensor(point2ego[[0, 1, 3], :][:, [0, 1, 3]], dtype=self.dType)
+
+        xDim = gt_masks.shape[-2]
+        yDim = gt_masks.shape[-1]
+
+        xLim = xDim * self.xRes / 2
+        yLim = yDim * self.yRes / 2
+
+        R[:2, 2] /= torch.Tensor([xLim, yLim]).to(self.dType)
+
+        R[:2, 2] = R[:2, 2].flip(dims=(0,))
+
+        angle = torch.atan2(R[1, 0], R[0, 0])
+
+        R[:2, 2] = torch.Tensor(
+            [[torch.cos(angle), -torch.sin(angle) * (xLim / yLim)],
+            [torch.sin(angle) * (yLim / xLim), torch.cos(angle)]]
+        ).to(self.dType) @ R[:2, 2]
+
+        R[:2, :2] *= torch.Tensor([[1, (xLim / yLim)], [(yLim / xLim), 1]]).to(self.dType)
+
+        theta = torch.unsqueeze(R[:2, :], 0)
+
+        unsqueezed_gt_masks = torch.unsqueeze(gt_masks, 0)
+
+        grid = F.affine_grid(theta, unsqueezed_gt_masks.size(), align_corners=False)
+
+        new_gt_mask = F.grid_sample(
+            unsqueezed_gt_masks,
+            grid,
+            mode='nearest',
+            align_corners=False
+        ).squeeze(0).to(torch.bool)
+        
+        # gt_masks = np.load(gt_path)['data'][:, 52:308, 52:308]
+        # gt_masks = np.rot90(gt_masks, 2, axes=(2, 1))
+
+        # car_mask = gt_masks[1]
+        # truck_mask = np.logical_or(gt_masks[2], gt_masks[3])
+        # cyclist_mask = np.logical_or(gt_masks[4], gt_masks[5], gt_masks[6])
+        # pedestrian_mask = gt_masks[7]
+
+        # road_mask = np.logical_and(
+        #     gt_masks[0],
+        #     np.logical_not(np.logical_or.reduce((car_mask, truck_mask, cyclist_mask, pedestrian_mask)))
+        # )
+
+        # gt_mask = np.array([road_mask, car_mask, truck_mask, cyclist_mask, pedestrian_mask])
+
+        data['gt_masks_bev'] = new_gt_mask[
+            :,
+            ((xDim - self.DxDim) // 2):((xDim + self.DxDim) // 2),
+            ((yDim - self.DyDim) // 2):((yDim + self.DyDim) // 2)
+        ].detach().clone().cpu().numpy()
 
         return data
 
@@ -469,28 +544,46 @@ class LoadPointsFromFile:
 
 
 @PIPELINES.register_module()
-class LoadCarlaPointsFromFile:
+class LoadSimBEVPointsFromFile:
     '''
-    Loads lidar point cloud from binary file.
+    Load lidar point cloud from compressed NumPy file.
 
-    Attributes:
+    Args:
         - coord_type: coordinate type of the data.
-
-    Methods:
-        - _load_points: loads point cloud data from binary file.
     '''
 
     def __init__(self, coord_type):
         self.coord_type = coord_type
 
     def _load_points(self, lidar_path):
+        '''
+        Load point cloud data from file.
+
+        Args:
+            lidar_path: path to the compressed point cloud file.
+
+        Returns:
+            points: array of point cloud data.
+        '''
         mmcv.check_file_exist(lidar_path)
         
-        points = np.load(lidar_path)
+        if lidar_path.endswith('.npz'):
+            points = np.load(lidar_path)['data']
+        else:
+            points = np.load(lidar_path)
 
         return points
 
     def __call__(self, results):
+        '''
+        Load point cloud data from file.
+
+        Args:
+            results: dictionary containing path to point cloud file.
+        
+        Returns:
+            results: dictionary containing point cloud data.
+        '''
         lidar_path = results['lidar_path']
         
         points = self._load_points(lidar_path)

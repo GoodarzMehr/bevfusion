@@ -9,5 +9,5 @@ model:
       grid_transform:
         input_scope: [[-51.2, 51.2, 0.8], [-51.2, 51.2, 0.8]]
         output_scope: [[-51.2, 51.2, 0.4], [-51.2, 51.2, 0.4]]
-      classes: ${classes}
+      classes: ${map_classes}
       loss: focal

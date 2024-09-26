@@ -156,7 +156,7 @@ class GlobalRotScaleTrans:
 
 
 @PIPELINES.register_module()
-class GlobalCarlaRotScaleTrans:
+class GlobalSimBEVRotScaleTrans:
     def __init__(self, resize_lim, rot_lim, trans_lim, is_train):
         self.resize_lim = resize_lim
         self.rot_lim = rot_lim
@@ -169,8 +169,8 @@ class GlobalCarlaRotScaleTrans:
         if self.is_train:
             scale = random.uniform(*self.resize_lim)
             theta = random.uniform(*self.rot_lim)
-            
             translation = np.array([random.normal(0, self.trans_lim) for i in range(3)])
+
             rotation = np.eye(3)
 
             if 'points' in data:
@@ -178,6 +178,18 @@ class GlobalCarlaRotScaleTrans:
                 data['points'].translate(translation)
                 data['points'].scale(scale)
 
+            rotation = np.array([[np.cos(theta), -np.sin(theta), 0],
+                                 [np.sin(theta), np.cos(theta), 0],
+                                 [0, 0, 1]]) @ rotation
+            
+            gt_boxes = data['gt_bboxes_3d']
+
+            gt_boxes.rotate(theta).numpy()
+            gt_boxes.translate(translation)
+            gt_boxes.scale(scale)
+
+            data['gt_bboxes_3d'] = gt_boxes
+            
             transform[:3, :3] = rotation.T * scale
             transform[:3, 3] = translation * scale
 

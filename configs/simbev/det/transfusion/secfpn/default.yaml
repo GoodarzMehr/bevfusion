@@ -1,33 +1,4 @@
 model:
-  encoders:
-    camera: null
-    lidar:
-      voxelize:
-        max_num_points: 10
-        point_cloud_range: ${point_cloud_range}
-        voxel_size: ${voxel_size}
-        max_voxels: [90000, 120000]
-      backbone:
-        type: SparseEncoder
-        in_channels: 5
-        sparse_shape: [1024, 1024, 41]
-        output_channels: 128
-        order:
-          - conv
-          - norm
-          - act
-        encoder_channels:
-          - [16, 16, 32]
-          - [32, 32, 64]
-          - [64, 64, 128]
-          - [128, 128]
-        encoder_paddings:
-          - [0, 0, 1]
-          - [0, 0, 1]
-          - [0, 0, [1, 1, 0]]
-          - [0, 0]
-        block_type: basicblock
-  fuser: null
   decoder:
     backbone:
       type: SECOND
@@ -56,12 +27,13 @@ model:
         bias: false
       use_conv_for_no_stride: true
   heads:
-    map:
+    object:
       in_channels: 512
 
 optimizer:
   type: AdamW
   lr: 1.0e-4
+  weight_decay: 0.01
 
 optimizer_config:
   grad_clip:

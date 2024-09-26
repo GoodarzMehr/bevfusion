@@ -62,7 +62,7 @@ torchpack dist-run -np 8 python tools/train.py configs/carla/seg/fusion-bev256d2
 ```
 and replace 8 with the number of your GPUs. You can change `samples_per_gpu` and `workers_per_gpu` values in `configs/carla/default.yaml` based on your GPU memory and CPU cores.
 
-For evaluation and visualization, change `data.test.ann_file` in `configs/carla/default.yaml` to `${dataset_root + "infos/carla_infos_test.json"}`.
+For evaluation and visualization, change `data.test.ann_file` in `configs/carla/default.yaml` to `${dataset_root + "infos/simbev_infos_test.json"}`.
 
 For evaluation, run
 ```bash

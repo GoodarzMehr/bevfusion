@@ -23,7 +23,7 @@
 # BEVFusion Docker Configuration Script
 #
 # This script performs all the necessary steps for creating a BEVFusion Docker
-# image along with the required dependencies.
+# image.
 #
 # The base Docker image is Ubuntu 20.04 with CUDA 11.3. If you want to use a
 # different base image, you may need to modify "ubuntu2004/x86_64" when
@@ -42,6 +42,20 @@
 # 3. In the Dockerfile directory, run
 #
 # docker build --no-cache --rm --build-arg ARG -t bevfusion:develop .
+
+# Usage:
+#
+# Launch a container by running
+#
+# docker run --privileged --gpus all --network=host -e DISPLAY=$DISPLAY
+# -v [path/to/BEVFusion]/bevfusion:/home/bevfusion
+# -v [path/to/dataset]/dataset:/dataset
+# --shm-size 32g -it bevfusion:develop /bin/bash
+#
+# Use "nvidia-smi" to ensure your graphics card is visible inside the
+# container. Then, as the root user inside the "bevfusion" directory, run
+#
+# python setup.py develop
 
 FROM nvidia/cuda:11.3.1-devel-ubuntu20.04
 
