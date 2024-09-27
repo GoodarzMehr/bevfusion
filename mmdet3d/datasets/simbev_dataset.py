@@ -17,8 +17,6 @@ CAM_NAME = ['CAM_FRONT_LEFT', 'CAM_FRONT', 'CAM_FRONT_RIGHT',
             'CAM_BACK_LEFT', 'CAM_BACK', 'CAM_BACK_RIGHT']
 
 OBJECT_CLASSES = {
-    7: 'traffic_light',
-    8: 'traffic_sign',
     12: 'pedestrian',
     14: 'car',
     15: 'truck',
@@ -202,7 +200,7 @@ class SimBEVDataset(Dataset):
                         
                         gamma = np.arctan2(diff[1], diff[0])
 
-                        center.append(-gamma - np.pi / 2)
+                        center.append(-gamma)
 
                         gt_boxes.append(center)
                         gt_names.append(OBJECT_CLASSES[tag])

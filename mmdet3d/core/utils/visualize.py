@@ -22,7 +22,7 @@ OBJECT_PALETTE = {
     "motorcycle": (255, 61, 99),
     "bicycle": (220, 20, 60),
     "pedestrian": (0, 0, 230),
-    "traffic_cone": (47, 79, 79),
+    "traffic_cone": (47, 79, 79)
 }
 
 MAP_PALETTE = {

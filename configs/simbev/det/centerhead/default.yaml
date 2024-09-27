@@ -29,7 +29,6 @@ model:
         - ["car"]
         - ["truck"]
         - ["bus"]
-        - ["traffic_light", "traffic_sign"]
         - ["motorcycle", "bicycle"]
         - ["pedestrian"]
       common_heads:

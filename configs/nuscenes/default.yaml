@@ -258,7 +258,7 @@ test_pipeline:
       - lidar_aug_matrix
 
 data:
-  samples_per_gpu: 2
+  samples_per_gpu: 4
   workers_per_gpu: 4
   train:
     type: CBGSDataset
@@ -273,6 +273,7 @@ data:
       test_mode: false
       use_valid_flag: true
       box_type_3d: LiDAR
+      load_interval: 32
   val:
     type: ${dataset_type}
     dataset_root: ${dataset_root}

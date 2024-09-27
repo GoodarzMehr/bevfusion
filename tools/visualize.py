@@ -61,7 +61,7 @@ def main() -> None:
     dataset = build_dataset(cfg.data[args.split])
     dataflow = build_dataloader(
         dataset,
-        samples_per_gpu=2,
+        samples_per_gpu=1,
         workers_per_gpu=cfg.data.workers_per_gpu,
         dist=True,
         shuffle=False,
@@ -82,11 +82,13 @@ def main() -> None:
     for data in tqdm(dataflow):
         metas = data["metas"].data[0][0]
 
-        if args.mode == "carla":
-            name = "{}-SimBEV".format(metas["timestamp"])
-        else:
-            name = "{}-{}".format(metas["timestamp"], metas["token"])
+        # if args.mode == "carla":
+        #     name = "{}-SimBEV".format(metas["timestamp"])
+        # else:
+        #     name = "{}-{}".format(metas["timestamp"], metas["token"])
 
+        name = "{}-SimBEV".format(metas["timestamp"])
+        
         if args.mode == "pred" or args.mode == "carla":
             with torch.inference_mode():
                 outputs = model(**data)
