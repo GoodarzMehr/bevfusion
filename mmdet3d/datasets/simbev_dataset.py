@@ -52,6 +52,7 @@ class SimBEVDataset(Dataset):
         test_mode=False,
         filter_empty_gt=True,
         with_velocity=True,
+        use_valid_flag=False,
         load_interval=64,
         box_type_3d='LiDAR'
     ):
@@ -64,6 +65,7 @@ class SimBEVDataset(Dataset):
         self.test_mode = test_mode
         self.filter_empty_gt = filter_empty_gt
         self.with_velocity = with_velocity
+        self.use_valid_flag = use_valid_flag
         self.load_interval = load_interval
 
         self.box_type_3d, self.box_mode_3d = get_box_type(box_type_3d)
@@ -111,7 +113,11 @@ class SimBEVDataset(Dataset):
     def get_cat_ids(self, index):
         info = self.data_infos[index]
 
-        gt_names = set(info['gt_names'])
+        if self.use_valid_flag:
+            mask = info['valid_flag']
+            gt_names = set(info['gt_names'][mask])
+        else:
+            gt_names = set(info['gt_names'])
 
         cat_ids = []
 
@@ -163,6 +169,10 @@ class SimBEVDataset(Dataset):
             gt_boxes = []
             gt_names = []
             gt_velocities = []
+            
+            num_lidar_pts = []
+            num_radar_pts = []
+            valid_flag = []
 
             gt_det_path = info['GT_DET']
 
@@ -205,10 +215,18 @@ class SimBEVDataset(Dataset):
                         gt_boxes.append(center)
                         gt_names.append(OBJECT_CLASSES[tag])
                         gt_velocities.append(det_object['linear_velocity'][:2])
+                        
+                        num_lidar_pts.append(det_object['num_lidar_pts'])
+                        num_radar_pts.append(det_object['num_radar_pts'])
+                        valid_flag.append(det_object['valid_flag'])
 
             info['gt_boxes'] = np.array(gt_boxes)
             info['gt_names'] = np.array(gt_names)
             info['gt_velocity'] = np.array(gt_velocities)
+
+            info['num_lidar_pts'] = np.array(num_lidar_pts)
+            info['num_radar_pts'] = np.array(num_radar_pts)
+            info['valid_flag'] = np.array(valid_flag)
 
         return infos
     
@@ -289,8 +307,13 @@ class SimBEVDataset(Dataset):
     def get_ann_info(self, index):
         info = self.data_infos[index]
 
-        gt_bboxes_3d = info['gt_boxes']
-        gt_names_3d = info['gt_names']
+        if self.use_valid_flag:
+            mask = info['valid_flag']
+        else:
+            mask = info['num_lidar_pts'] > 0
+        
+        gt_bboxes_3d = info['gt_boxes'][mask]
+        gt_names_3d = info['gt_names'][mask]
 
         gt_labels_3d = []
 
@@ -303,7 +326,7 @@ class SimBEVDataset(Dataset):
         gt_labels_3d = np.array(gt_labels_3d)
 
         if self.with_velocity:
-            gt_velocity = info['gt_velocity']
+            gt_velocity = info['gt_velocity'][mask]
 
             nan_mask = np.isnan(gt_velocity[:, 0])
             
@@ -402,7 +425,7 @@ class SimBEVDataset(Dataset):
         if 'masks_bev' in results[0]:
             metrics.update(self.evaluate_map(results))
 
-        print(results[0])
+        # print(results[0])
         
         return metrics
     
