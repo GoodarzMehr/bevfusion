@@ -5,6 +5,8 @@ import numpy as np
 
 from .pipelines import Compose
 
+from pytorch3d.ops import box3d_overlap
+
 from mmdet.datasets import DATASETS
 from torch.utils.data import Dataset
 
@@ -425,7 +427,18 @@ class SimBEVDataset(Dataset):
         if 'masks_bev' in results[0]:
             metrics.update(self.evaluate_map(results))
 
+        if 'boxes_3d' in results[0]:
+            simbev_eval = SimBEVDetectionEval(results)
+
+            metrics['mAP'] = simbev_eval.evaluate()
+        
         # print(results[0])
+        # print(results[0]['boxes_3d'].corners)
+        # print(results[0]['boxes_3d'].gravity_center)
+        # print(results[0]['gt_bboxes_3d'].corners)
+        # print(results[0]['gt_bboxes_3d'].gravity_center)
+        
+        print(metrics)
         
         return metrics
     
@@ -452,3 +465,68 @@ class SimBEVDataset(Dataset):
     
     def __len__(self):
         return len(self.data_infos)
+
+
+class SimBEVDetectionEval:
+    def __init__(self, results, iou_thresholds=[0.5]):
+        self.results = results
+
+        self.iou_thresholds = iou_thresholds
+
+    def evaluate(self):
+        if len(self.results[0]['boxes_3d'].tensor) > 0:
+            boxes_3d = self.results[0]['boxes_3d'].corners
+        else:
+            boxes_3d = torch.empty((0, 8, 3))
+        scores_3d = self.results[0]['scores_3d']
+        labels_3d = self.results[0]['labels_3d']
+        gt_boxes_3d = self.results[0]['gt_bboxes_3d'].corners
+        gt_labels_3d = self.results[0]['gt_labels_3d']
+
+        aps = []
+
+        unique_classes = torch.unique(torch.cat((labels_3d, gt_labels_3d)))
+
+        for cls in unique_classes:
+            pred_mask = labels_3d == cls
+            gt_mask = gt_labels_3d == cls
+
+            pred_boxes = boxes_3d[pred_mask]
+            pred_scores = scores_3d[pred_mask]
+            gt_boxes = gt_boxes_3d[gt_mask]
+
+            sorted_indices = torch.argsort(-pred_scores)
+            pred_boxes = pred_boxes[sorted_indices]
+            pred_scores = pred_scores[sorted_indices]
+
+            gt_assigned = torch.zeros(len(gt_boxes), dtype=torch.bool)
+
+            tp = torch.zeros(len(pred_boxes))
+            fp = torch.zeros(len(pred_boxes))
+
+            for i, pred_box in enumerate(pred_boxes):
+                iou_max = 0
+                max_gt_idx = -1
+
+                for j, gt_box in enumerate(gt_boxes):
+                    if not gt_assigned[j]:
+                        _, iou = box3d_overlap(torch.unsqueeze(pred_box, 0), torch.unsqueeze(gt_box, 0))
+                        if iou > iou_max:
+                            iou_max = iou
+                            max_gt_idx = j
+
+                if iou_max >= self.iou_thresholds[0]:
+                    tp[i] = 1
+                    gt_assigned[max_gt_idx] = True
+                else:
+                    fp[i] = 1
+
+            fp = torch.cumsum(fp, dim=0)
+            tp = torch.cumsum(tp, dim=0)
+            recalls = tp / len(gt_boxes)
+            precisions = tp / (tp + fp)
+
+            ap = torch.trapz(precisions, recalls)
+            aps.append(ap.item())
+
+            return torch.tensor(aps).mean().item()

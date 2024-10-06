@@ -562,8 +562,6 @@ class NuScenesDataset(Custom3DDataset):
 
             if tmp_dir is not None:
                 tmp_dir.cleanup()
-
-        print(results[0])
         
         return metrics
 

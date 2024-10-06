@@ -85,6 +85,8 @@ torchpack mmcv==1.4.5 mmcv-full==1.4.5 mmdet==2.20.0 nuscenes-devkit mpi4py==3.0
 yapf==0.40.1 matplotlib opencv-python open3d ninja -f https://download.pytorch.org/whl/torch_stable.html
 
 RUN pip uninstall mmcv mmcv-full -y
-RUN pip install --no-cache-dir mmcv==1.4.0 mmcv-full==1.4.0
+RUN MMCV_WITH_OPS=1 FORCE_CUDA=1 pip install --no-cache-dir mmcv==1.4.0 mmcv-full==1.4.0
+
+RUN pip install --no-cache-dir "git+https://github.com/facebookresearch/pytorch3d.git@v0.6.0"
 
 USER ${USER}
