@@ -236,6 +236,8 @@ class SimBEVDataset(Dataset):
         info = self.data_infos[index]
 
         data = dict(
+            scene = info['scene'],
+            frame = info['frame'],
             timestamp = info['timestamp'],
             gt_seg_path = info['GT_SEG'],
             gt_det_path = info['GT_DET'],
@@ -384,7 +386,7 @@ class SimBEVDataset(Dataset):
         return example
     
     def evaluate_map(self, results):
-        thresholds = torch.tensor([0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9])
+        thresholds = torch.tensor([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9])
 
         num_classes = len(self.map_classes)
         num_thresholds = len(thresholds)
@@ -468,65 +470,103 @@ class SimBEVDataset(Dataset):
 
 
 class SimBEVDetectionEval:
-    def __init__(self, results, iou_thresholds=[0.5]):
+    def __init__(self, results, iou_thresholds=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]):
         self.results = results
 
         self.iou_thresholds = iou_thresholds
 
     def evaluate(self):
-        if len(self.results[0]['boxes_3d'].tensor) > 0:
-            boxes_3d = self.results[0]['boxes_3d'].corners
-        else:
-            boxes_3d = torch.empty((0, 8, 3))
-        scores_3d = self.results[0]['scores_3d']
-        labels_3d = self.results[0]['labels_3d']
-        gt_boxes_3d = self.results[0]['gt_bboxes_3d'].corners
-        gt_labels_3d = self.results[0]['gt_labels_3d']
+        num_classes = len(self.object_classes)
+        num_thresholds = len(self.iou_thresholds)
 
-        aps = []
+        ap = torch.zeros((num_classes, num_thresholds))
 
-        unique_classes = torch.unique(torch.cat((labels_3d, gt_labels_3d)))
+        for j, threshold in enumerate(self.iou_thresholds):
 
-        for cls in unique_classes:
-            pred_mask = labels_3d == cls
-            gt_mask = gt_labels_3d == cls
+            tps = {i: torch.empty((0, )) for i in range(num_classes)}
+            fps = {i: torch.empty((0, )) for i in range(num_classes)}
 
-            pred_boxes = boxes_3d[pred_mask]
-            pred_scores = scores_3d[pred_mask]
-            gt_boxes = gt_boxes_3d[gt_mask]
+            scores = {i: torch.empty((0, )) for i in range(num_classes)}
 
-            sorted_indices = torch.argsort(-pred_scores)
-            pred_boxes = pred_boxes[sorted_indices]
-            pred_scores = pred_scores[sorted_indices]
+            num_gt_boxes = {i: 0 for i in range(num_classes)}
 
-            gt_assigned = torch.zeros(len(gt_boxes), dtype=torch.bool)
+            for result in self.results:
+                boxes_3d = result['boxes_3d']
+                scores_3d = result['scores_3d']
+                labels_3d = result['labels_3d']
+                gt_boxes_3d = result['gt_bboxes_3d']
+                gt_labels_3d = result['gt_labels_3d']
 
-            tp = torch.zeros(len(pred_boxes))
-            fp = torch.zeros(len(pred_boxes))
-
-            for i, pred_box in enumerate(pred_boxes):
-                iou_max = 0
-                max_gt_idx = -1
-
-                for j, gt_box in enumerate(gt_boxes):
-                    if not gt_assigned[j]:
-                        _, iou = box3d_overlap(torch.unsqueeze(pred_box, 0), torch.unsqueeze(gt_box, 0))
-                        if iou > iou_max:
-                            iou_max = iou
-                            max_gt_idx = j
-
-                if iou_max >= self.iou_thresholds[0]:
-                    tp[i] = 1
-                    gt_assigned[max_gt_idx] = True
+                if len(boxes_3d.tensor) > 0:
+                    boxes_3d_corners = boxes_3d.corners
                 else:
-                    fp[i] = 1
+                    boxes_3d_corners = torch.empty((0, 8, 3))
 
-            fp = torch.cumsum(fp, dim=0)
-            tp = torch.cumsum(tp, dim=0)
-            recalls = tp / len(gt_boxes)
-            precisions = tp / (tp + fp)
+                if len(gt_boxes_3d.tensor) > 0:
+                    gt_boxes_3d_corners = gt_boxes_3d.corners
+                else:
+                    gt_boxes_3d_corners = torch.empty((0, 8, 3))
+                
+                for cls in range(num_classes):
+                    pred_mask = labels_3d == cls
+                    
+                    gt_mask = gt_labels_3d == cls
 
-            ap = torch.trapz(precisions, recalls)
-            aps.append(ap.item())
+                    pred_boxes = boxes_3d_corners[pred_mask]
+                    pred_scores = scores_3d[pred_mask]
+                    
+                    gt_boxes = gt_boxes_3d_corners[gt_mask]
 
-            return torch.tensor(aps).mean().item()
+                    sorted_indices = torch.argsort(-pred_scores)
+
+                    pred_boxes = pred_boxes[sorted_indices]
+                    pred_scores = pred_scores[sorted_indices]
+
+                    _, ious = box3d_overlap(pred_boxes, gt_boxes)
+
+                    assigned_gt = torch.zeros(len(gt_boxes), dtype=torch.bool)
+
+                    tp = torch.zeros(len(pred_boxes))
+                    fp = torch.zeros(len(pred_boxes))
+
+                    for i, pred_box in enumerate(pred_boxes):
+                        iou_max = 0
+                        max_gt_idx = -1
+
+                        for j, gt_box in enumerate(gt_boxes):
+                            if not assigned_gt[j]:
+                                iou = ious[i, j]
+                                
+                                if iou > iou_max:
+                                    iou_max = iou
+                                    max_gt_idx = j
+                        
+                        if iou_max >= threshold:
+                            tp[i] = 1
+
+                            assigned_gt[max_gt_idx] = True
+                        else:
+                            fp[i] = 1
+                    
+                    tps[cls] = torch.cat((tps[cls], tp))
+                    fps[cls] = torch.cat((fps[cls], fp))
+
+                    scores[cls] = torch.cat((scores[cls], pred_scores))
+
+                    num_gt_boxes[cls] += len(gt_boxes)
+
+            for cls in range(num_classes):
+                sorted_indices = torch.argsort(-scores[cls])
+
+                tps[cls] = tps[cls][sorted_indices]
+                fps[cls] = fps[cls][sorted_indices]
+
+                tps[cls] = torch.cumsum(tps[cls], dim=0)
+                fps[cls] = torch.cumsum(fps[cls], dim=0)
+
+                recalls = tps[cls] / num_gt_boxes[cls]
+                precisions = tps[cls] / (tps[cls] + fps[cls])
+
+                ap[cls, j] = torch.trapz(precisions, recalls)
+
+        return ap

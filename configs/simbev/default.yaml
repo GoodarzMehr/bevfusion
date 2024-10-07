@@ -239,6 +239,7 @@ data:
       pipeline: ${train_pipeline}
       modality: ${input_modality}
       test_mode: false
+      use_valid_flag: true
       box_type_3d: LiDAR
   val:
     type: ${dataset_type}
