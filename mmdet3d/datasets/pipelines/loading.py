@@ -397,21 +397,6 @@ class LoadSimBEVBEVSegmentation:
             mode='nearest',
             align_corners=False
         ).squeeze(0).to(torch.bool)
-        
-        # gt_masks = np.load(gt_path)['data'][:, 52:308, 52:308]
-        # gt_masks = np.rot90(gt_masks, 2, axes=(2, 1))
-
-        # car_mask = gt_masks[1]
-        # truck_mask = np.logical_or(gt_masks[2], gt_masks[3])
-        # cyclist_mask = np.logical_or(gt_masks[4], gt_masks[5], gt_masks[6])
-        # pedestrian_mask = gt_masks[7]
-
-        # road_mask = np.logical_and(
-        #     gt_masks[0],
-        #     np.logical_not(np.logical_or.reduce((car_mask, truck_mask, cyclist_mask, pedestrian_mask)))
-        # )
-
-        # gt_mask = np.array([road_mask, car_mask, truck_mask, cyclist_mask, pedestrian_mask])
 
         data['gt_masks_bev'] = new_gt_mask[
             :,
