@@ -430,17 +430,9 @@ class SimBEVDataset(Dataset):
             metrics.update(self.evaluate_map(results))
 
         if 'boxes_3d' in results[0]:
-            simbev_eval = SimBEVDetectionEval(results)
+            simbev_eval = SimBEVDetectionEval(results, self.object_classes)
 
-            metrics['mAP'] = simbev_eval.evaluate()
-        
-        # print(results[0])
-        # print(results[0]['boxes_3d'].corners)
-        # print(results[0]['boxes_3d'].gravity_center)
-        # print(results[0]['gt_bboxes_3d'].corners)
-        # print(results[0]['gt_bboxes_3d'].gravity_center)
-        
-        print(metrics)
+            metrics.update(simbev_eval.evaluate())
         
         return metrics
     
@@ -470,16 +462,16 @@ class SimBEVDataset(Dataset):
 
 
 class SimBEVDetectionEval:
-    def __init__(self, results, iou_thresholds=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]):
+    def __init__(self, results, classes, iou_thresholds=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]):
         self.results = results
-
+        self.classes = classes
         self.iou_thresholds = iou_thresholds
 
     def evaluate(self):
-        num_classes = len(self.object_classes)
+        num_classes = len(self.classes)
         num_thresholds = len(self.iou_thresholds)
 
-        ap = torch.zeros((num_classes, num_thresholds))
+        aps = torch.zeros((num_classes, num_thresholds))
 
         for j, threshold in enumerate(self.iou_thresholds):
 
@@ -522,7 +514,12 @@ class SimBEVDetectionEval:
                     pred_boxes = pred_boxes[sorted_indices]
                     pred_scores = pred_scores[sorted_indices]
 
-                    _, ious = box3d_overlap(pred_boxes, gt_boxes)
+                    if len(pred_boxes) == 0:
+                        ious = torch.zeros((0, len(gt_boxes)))
+                    elif len(gt_boxes) == 0:
+                        ious = torch.zeros((len(pred_boxes), 0))
+                    else:
+                        _, ious = box3d_overlap(pred_boxes, gt_boxes)
 
                     assigned_gt = torch.zeros(len(gt_boxes), dtype=torch.bool)
 
@@ -561,12 +558,22 @@ class SimBEVDetectionEval:
                 tps[cls] = tps[cls][sorted_indices]
                 fps[cls] = fps[cls][sorted_indices]
 
-                tps[cls] = torch.cumsum(tps[cls], dim=0)
-                fps[cls] = torch.cumsum(fps[cls], dim=0)
+                tps[cls] = torch.cumsum(tps[cls], dim=0).astype(torch.float32)
+                fps[cls] = torch.cumsum(fps[cls], dim=0).astype(torch.float32)
 
-                recalls = tps[cls] / num_gt_boxes[cls]
+                recalls = tps[cls] / num_gt_boxes[cls].astype(torch.float32)
                 precisions = tps[cls] / (tps[cls] + fps[cls])
 
-                ap[cls, j] = torch.trapz(precisions, recalls)
+                aps[cls, j] = torch.trapz(precisions, recalls)
 
-        return ap
+        metrics = {}
+        
+        for index, name in enumerate(self.classes):
+            metrics[f'det/{name}/AP@max'] = aps[index].max().item()
+            
+            for threshold, ap in zip(self.iou_thresholds, aps[index]):
+                metrics[f'det/{name}/AP@{threshold:.2f}'] = ap.item()
+        
+        metrics['det/mean/AP@max'] = aps.max(dim=1).values.mean().item()
+
+        return metrics
