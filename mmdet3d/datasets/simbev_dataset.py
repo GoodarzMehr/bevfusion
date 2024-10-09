@@ -31,16 +31,26 @@ OBJECT_CLASSES = {
 @DATASETS.register_module()
 class SimBEVDataset(Dataset):
     '''
-    This class serves as the API for experiments on a CARLA dataset generated
-    by SimBEV.
+    This class serves as the API for experiments on the SimBEV dataset.
 
-    Attributes:
+    Args:
         dataset_root: root directory of the dataset.
         ann_file: annotation file of the dataset.
-        classes: dataset map classes.
-        modality: modality of the dataset.
+        object_classes: list of object classes in the dataset.
+        map_classes: list of BEV map classes in the dataset.
+        pipeline: pipeline used for data processing.
+        modality: modality of the input data.
         test_mode: whether the dataset is used for training or testing.
-        load_interval: interval of data samples.
+        filter_empty_gt: whether to filter out samples with empty ground
+            truth.
+        with_velocity: whether to include velocity information in the object
+            detection ground truth and predictions.
+        use_valid_flag: whether to filter out invalid objects from each
+            sample.
+        load_interval: interval for loading data samples.
+        box_type_3d: type of 3D box used in the dataset, indicating the
+            coordinate system of the 3D box. Can be 'LiDAR', 'Depth', or
+            'Camera'.
     '''
 
     def __init__(
@@ -55,7 +65,7 @@ class SimBEVDataset(Dataset):
         filter_empty_gt=True,
         with_velocity=True,
         use_valid_flag=False,
-        load_interval=64,
+        load_interval=32,
         box_type_3d='LiDAR'
     ):
         super().__init__()
@@ -77,7 +87,6 @@ class SimBEVDataset(Dataset):
         self.CLASSES = self.get_classes(object_classes)
 
         self.cat2id = {name: i for i, name in enumerate(self.CLASSES)}
-        # self.CLASSES = self.get_classes(map_classes)
 
         self.data_infos = self.load_annotations(self.ann_file)
 
@@ -91,6 +100,13 @@ class SimBEVDataset(Dataset):
             self._set_group_flag()
 
     def set_epoch(self, epoch):
+        '''
+        Set the epoch for transforms that require epoch information along the
+        pipeline.
+
+        Args:
+            epoch: epoch to set.
+        '''
         self.epoch = epoch
         
         if hasattr(self, 'pipeline'):
@@ -100,6 +116,17 @@ class SimBEVDataset(Dataset):
     
     @classmethod
     def get_classes(cls, classes=None):
+        '''
+        Get the list of object class names in the dataset.
+
+        Args:
+            cls: list of dataset classes.
+            classes: path to the file containing the list of classes, or the
+                list of classes itself.
+        
+        Returns:
+            class_names: list of object class names in the dataset.
+        '''
         if classes is None:
             return cls.CLASSES
 
@@ -113,6 +140,15 @@ class SimBEVDataset(Dataset):
         return class_names
     
     def get_cat_ids(self, index):
+        '''
+        Get category IDs of objects in the sample.
+
+        Args:
+            index: index of the sample in the dataset.
+
+        Returns:
+            cat_ids: list of category IDs of objects in the sample.
+        '''
         info = self.data_infos[index]
 
         if self.use_valid_flag:
@@ -128,27 +164,6 @@ class SimBEVDataset(Dataset):
                 cat_ids.append(self.cat2id[name])
         
         return cat_ids
-        # gt_seg_path = info['GT_SEG']
-
-        # mmcv.check_file_exist(gt_seg_path)
-        
-        # gt_masks = np.load(gt_seg_path)['data'][:, 52:308, 52:308]
-
-        # car_mask = gt_masks[1]
-        # truck_mask = np.logical_or(gt_masks[2], gt_masks[3])
-        # cyclist_mask = np.logical_or(gt_masks[4], gt_masks[5], gt_masks[6])
-        # pedestrian_mask = gt_masks[7]
-
-        # road_mask = np.logical_and(
-        #     gt_masks[0],
-        #     np.logical_not(np.logical_or.reduce((car_mask, truck_mask, cyclist_mask, pedestrian_mask)))
-        # )
-
-        # gt_mask = np.array([road_mask, car_mask, truck_mask, cyclist_mask, pedestrian_mask])
-
-        # categories = gt_masks.any(axis=(1, 2))
-
-        # return np.where(categories == True)[0].tolist()
     
     def load_annotations(self, ann_file):
         annotations = mmcv.load(ann_file)
@@ -473,7 +488,7 @@ class SimBEVDetectionEval:
 
         aps = torch.zeros((num_classes, num_thresholds))
 
-        for j, threshold in enumerate(self.iou_thresholds):
+        for k, threshold in enumerate(self.iou_thresholds):
 
             tps = {i: torch.empty((0, )) for i in range(num_classes)}
             fps = {i: torch.empty((0, )) for i in range(num_classes)}
@@ -558,13 +573,16 @@ class SimBEVDetectionEval:
                 tps[cls] = tps[cls][sorted_indices]
                 fps[cls] = fps[cls][sorted_indices]
 
-                tps[cls] = torch.cumsum(tps[cls], dim=0).astype(torch.float32)
-                fps[cls] = torch.cumsum(fps[cls], dim=0).astype(torch.float32)
+                tps[cls] = torch.cumsum(tps[cls], dim=0).to(torch.float32)
+                fps[cls] = torch.cumsum(fps[cls], dim=0).to(torch.float32)
 
-                recalls = tps[cls] / num_gt_boxes[cls].astype(torch.float32)
+                recalls = tps[cls] / num_gt_boxes[cls]
                 precisions = tps[cls] / (tps[cls] + fps[cls])
 
-                aps[cls, j] = torch.trapz(precisions, recalls)
+                recalls = torch.cat((torch.Tensor([0.0]), recalls))
+                precisions = torch.cat((torch.Tensor([1.0]), precisions))
+
+                aps[cls, k] = torch.trapz(precisions, recalls)
 
         metrics = {}
         
