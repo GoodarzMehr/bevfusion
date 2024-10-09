@@ -84,12 +84,15 @@ class SimBEVDataset(Dataset):
 
         self.epoch = -1
 
+        # Get the list of object classes in the dataset.
         self.CLASSES = self.get_classes(object_classes)
 
         self.cat2id = {name: i for i, name in enumerate(self.CLASSES)}
 
+        # Load annotations from the annotation file.
         self.data_infos = self.load_annotations(self.ann_file)
 
+        # Create the data processing pipeline.
         if pipeline is not None:
             self.pipeline = Compose(pipeline)
 
@@ -166,6 +169,15 @@ class SimBEVDataset(Dataset):
         return cat_ids
     
     def load_annotations(self, ann_file):
+        '''
+        Load annotations from the annotation file.
+
+        Args:
+            ann_file: annotation file of the dataset.
+
+        Returns:
+            data_infos: list of data samples in the dataset.
+        '''
         annotations = mmcv.load(ann_file)
 
         data_infos = []
@@ -182,6 +194,17 @@ class SimBEVDataset(Dataset):
         return data_infos
     
     def load_gt_bboxes(self, infos):
+        '''
+        Load ground truth bounding boxes from file into the list of data
+        samples.
+
+        Args:
+            infos: list of data samples in the dataset.
+        
+        Returns:
+            infos: list of data samples updated with ground truth bounding
+                boxes.
+        '''
         for info in infos:
             gt_boxes = []
             gt_names = []
@@ -189,8 +212,10 @@ class SimBEVDataset(Dataset):
             
             num_lidar_pts = []
             num_radar_pts = []
+            
             valid_flag = []
 
+            # Load ground truth bounding boxes from file.
             gt_det_path = info['GT_DET']
 
             mmcv.check_file_exist(gt_det_path)
@@ -211,18 +236,23 @@ class SimBEVDataset(Dataset):
 
             global2lidar = np.linalg.inv(ego2global @ lidar2ego)
 
+            # Transform bounding boxes from the global coordinate system to
+            # the lidar coordinate system.
             for det_object in gt_det:
                 for tag in det_object['semantic_tags']:
                     if tag in OBJECT_CLASSES.keys():
                         global_bbox_corners = np.append(det_object['bounding_box'], np.ones((8, 1)), 1)
                         bbox_corners = (global2lidar @ global_bbox_corners.T)[:3].T
 
+                        # Calculate the center of the bounding box.
                         center = ((bbox_corners[0] + bbox_corners[7]) / 2).tolist()
 
+                        # Calculate the dimensions of the bounding box.
                         center.append(np.linalg.norm(bbox_corners[0] - bbox_corners[2]))
                         center.append(np.linalg.norm(bbox_corners[0] - bbox_corners[4]))
                         center.append(np.linalg.norm(bbox_corners[0] - bbox_corners[1]))
 
+                        # Calculate the yaw angle of the bounding box.
                         diff = bbox_corners[0] - bbox_corners[2]
                         
                         gamma = np.arctan2(diff[1], diff[0])
@@ -235,6 +265,7 @@ class SimBEVDataset(Dataset):
                         
                         num_lidar_pts.append(det_object['num_lidar_pts'])
                         num_radar_pts.append(det_object['num_radar_pts'])
+                        
                         valid_flag.append(det_object['valid_flag'])
 
             info['gt_boxes'] = np.array(gt_boxes)
@@ -243,11 +274,21 @@ class SimBEVDataset(Dataset):
 
             info['num_lidar_pts'] = np.array(num_lidar_pts)
             info['num_radar_pts'] = np.array(num_radar_pts)
+            
             info['valid_flag'] = np.array(valid_flag)
 
         return infos
     
     def get_data_info(self, index):
+        '''
+        Package information from a data sample.
+
+        Args:
+            index: index of the sample in the dataset.
+        
+        Returns:
+            data: packaged information from the sample.
+        '''
         info = self.data_infos[index]
 
         data = dict(
@@ -318,12 +359,20 @@ class SimBEVDataset(Dataset):
 
                 data['camera2ego'].append(camera2ego)
 
-        annotations = self.get_ann_info(index)
-        data['ann_info'] = annotations
+        data['ann_info'] = self.get_ann_info(index)
         
         return data
     
     def get_ann_info(self, index):
+        '''
+        Get annotation information for a data sample.
+
+        Args:
+            index: index of the sample in the dataset.
+        
+        Returns:
+            anns_results: annotation information from the sample.
+        '''
         info = self.data_infos[index]
 
         if self.use_valid_flag:
