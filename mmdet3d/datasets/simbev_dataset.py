@@ -415,6 +415,12 @@ class SimBEVDataset(Dataset):
         return anns_results
     
     def pre_pipeline(self, results):
+        '''
+        Prepare data for the pipeline.
+
+        Args:
+            results: data to be prepared for the pipeline.
+        '''
         results['img_fields'] = []
         results['bbox3d_fields'] = []
         results['pts_mask_fields'] = []
@@ -422,10 +428,20 @@ class SimBEVDataset(Dataset):
         results['bbox_fields'] = []
         results['mask_fields'] = []
         results['seg_fields'] = []
+
         results['box_type_3d'] = self.box_type_3d
         results['box_mode_3d'] = self.box_mode_3d
     
     def prepare_train_data(self, index):
+        '''
+        Prepare data for training.
+
+        Args:
+            index: index of the sample in the dataset.
+        
+        Returns:
+            example: data prepared for training.
+        '''
         input_dict = self.get_data_info(index)
 
         if input_dict is None:
@@ -441,6 +457,15 @@ class SimBEVDataset(Dataset):
         return example
     
     def prepare_test_data(self, index):
+        '''
+        Prepare data for testing.
+
+        Args:
+            index: index of the sample in the dataset.
+        
+        Returns:
+            example: data prepared for testing.
+        '''
         input_dict = self.get_data_info(index)
         
         self.pre_pipeline(input_dict)
@@ -450,6 +475,15 @@ class SimBEVDataset(Dataset):
         return example
     
     def evaluate_map(self, results):
+        '''
+        Evaluate BEV map segmentation results.
+
+        Args:
+            results: BEV map segmentation results from the model.
+        
+        Returns:
+            metrics: evaluation metrics for BEV map segmentation results.
+        '''
         thresholds = torch.tensor([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9])
 
         num_classes = len(self.map_classes)
@@ -473,26 +507,40 @@ class SimBEVDataset(Dataset):
             fp += (pred & ~label).sum(dim=1)
             fn += (~pred & label).sum(dim=1)
 
-        ious = tp / (tp + fp + fn + 1e-7)
+        ious = tp / (tp + fp + fn + 1e-6)
 
         metrics = {}
         
         for index, name in enumerate(self.map_classes):
-            metrics[f'map/{name}/iou@max'] = ious[index].max().item()
+            metrics[f'map/{name}/IoU@max'] = ious[index].max().item()
             
             for threshold, iou in zip(thresholds, ious[index]):
-                metrics[f'map/{name}/iou@{threshold.item():.2f}'] = iou.item()
+                metrics[f'map/{name}/IoU@{threshold.item():.2f}'] = iou.item()
         
-        metrics['map/mean/iou@max'] = ious.max(dim=1).values.mean().item()
+        metrics['map/mean/IoU@max'] = ious.max(dim=1).values.mean().item()
+
+        for index, threshold in enumerate(thresholds):
+            metrics[f'map/mean/IoU@{threshold.item():.2f}'] = ious[:, index].mean().item()
         
         return metrics
     
     def evaluate(self, results, **kwargs):
+        '''
+        Evaluate model results.
+
+        Args:
+            results: list of results from the model.
+        
+        Returns:
+            metrics: evaluation metrics for the results.
+        '''
         metrics = {}
 
+        # Evaluate BEV map segmentation results.
         if 'masks_bev' in results[0]:
             metrics.update(self.evaluate_map(results))
 
+        # Evaluate 3D object detection results.
         if 'boxes_3d' in results[0]:
             simbev_eval = SimBEVDetectionEval(results, self.object_classes)
 
@@ -501,9 +549,21 @@ class SimBEVDataset(Dataset):
         return metrics
     
     def _set_group_flag(self):
+        '''
+        Set the flag for the dataset.
+        '''
         self.flag = np.zeros(len(self), dtype=np.uint8)
 
     def _rand_another(self, index):
+        '''
+        Get another random data sample from the same group.
+
+        Args:
+            index: index of the sample in the dataset.
+        
+        Returns:
+            sample: index of another sample from the same group.
+        '''
         pool = np.where(self.flag == self.flag[index])[0]
         
         return np.random.choice(pool)
@@ -537,12 +597,22 @@ class SimBEVDetectionEval:
 
         aps = torch.zeros((num_classes, num_thresholds))
 
+        ates = torch.zeros((num_classes, num_thresholds))
+        aoes = torch.zeros((num_classes, num_thresholds))
+        ases = torch.zeros((num_classes, num_thresholds))
+        aves = torch.zeros((num_classes, num_thresholds))
+
         for k, threshold in enumerate(self.iou_thresholds):
 
             tps = {i: torch.empty((0, )) for i in range(num_classes)}
             fps = {i: torch.empty((0, )) for i in range(num_classes)}
 
             scores = {i: torch.empty((0, )) for i in range(num_classes)}
+
+            ate = {i: torch.empty((0, )) for i in range(num_classes)}
+            aoe = {i: torch.empty((0, )) for i in range(num_classes)}
+            ase = {i: torch.empty((0, )) for i in range(num_classes)}
+            ave = {i: torch.empty((0, )) for i in range(num_classes)}
 
             num_gt_boxes = {i: 0 for i in range(num_classes)}
 
@@ -568,33 +638,43 @@ class SimBEVDetectionEval:
                     
                     gt_mask = gt_labels_3d == cls
 
-                    pred_boxes = boxes_3d_corners[pred_mask]
+                    pred_boxes = boxes_3d[pred_mask]
+                    pred_box_corners = boxes_3d_corners[pred_mask]
+                    
                     pred_scores = scores_3d[pred_mask]
                     
-                    gt_boxes = gt_boxes_3d_corners[gt_mask]
+                    gt_boxes = gt_boxes_3d[gt_mask]
+                    gt_box_corners = gt_boxes_3d_corners[gt_mask]
 
                     sorted_indices = torch.argsort(-pred_scores)
 
                     pred_boxes = pred_boxes[sorted_indices]
+                    pred_box_corners = pred_box_corners[sorted_indices]
+                    
                     pred_scores = pred_scores[sorted_indices]
 
-                    if len(pred_boxes) == 0:
-                        ious = torch.zeros((0, len(gt_boxes)))
-                    elif len(gt_boxes) == 0:
-                        ious = torch.zeros((len(pred_boxes), 0))
+                    if len(pred_box_corners) == 0:
+                        ious = torch.zeros((0, len(gt_box_corners)))
+                    elif len(gt_box_corners) == 0:
+                        ious = torch.zeros((len(pred_box_corners), 0))
                     else:
-                        _, ious = box3d_overlap(pred_boxes, gt_boxes)
+                        _, ious = box3d_overlap(pred_box_corners, gt_box_corners)
 
-                    assigned_gt = torch.zeros(len(gt_boxes), dtype=torch.bool)
+                    assigned_gt = torch.zeros(len(gt_box_corners), dtype=torch.bool)
 
-                    tp = torch.zeros(len(pred_boxes))
-                    fp = torch.zeros(len(pred_boxes))
+                    tp = torch.zeros(len(pred_box_corners))
+                    fp = torch.zeros(len(pred_box_corners))
 
-                    for i, pred_box in enumerate(pred_boxes):
+                    ate_local = []
+                    aoe_local = []
+                    ase_local = []
+                    ave_local = []
+
+                    for i, pred_box in enumerate(pred_box_corners):
                         iou_max = 0
                         max_gt_idx = -1
 
-                        for j, gt_box in enumerate(gt_boxes):
+                        for j, gt_box in enumerate(gt_box_corners):
                             if not assigned_gt[j]:
                                 iou = ious[i, j]
                                 
@@ -606,6 +686,30 @@ class SimBEVDetectionEval:
                             tp[i] = 1
 
                             assigned_gt[max_gt_idx] = True
+
+                            ate_local.append(torch.linalg.vector_norm(pred_boxes[i].tensor[0, :3] - gt_boxes[max_gt_idx].tensor[0, :3]))
+
+                            diff_angle = (gt_boxes[max_gt_idx].tensor[0, 6] - pred_boxes[i].tensor[0, 6] + np.pi) % (2 * np.pi) - np.pi
+
+                            if diff_angle > np.pi:
+                                diff_angle = diff_angle - 2 * np.pi
+
+                            aoe_local.append(diff_angle)
+
+                            pred_wlh = pred_boxes[i].tensor[0, 3:6]
+                            gt_wlh = gt_boxes[max_gt_idx].tensor[0, 3:6]
+
+                            min_wlh = torch.minimum(pred_wlh, gt_wlh)
+
+                            pred_vol = torch.prod(pred_wlh)
+                            gt_vol = torch.prod(gt_wlh)
+                            intersection = torch.prod(min_wlh)
+
+                            union = pred_vol + gt_vol - intersection
+
+                            ase_local.append(1 - intersection / union)
+
+                            ave_local.append(torch.linalg.vector_norm(pred_boxes[i].tensor[0, -2:] - gt_boxes[max_gt_idx].tensor[0, -2:]))
                         else:
                             fp[i] = 1
                     
@@ -614,7 +718,12 @@ class SimBEVDetectionEval:
 
                     scores[cls] = torch.cat((scores[cls], pred_scores))
 
-                    num_gt_boxes[cls] += len(gt_boxes)
+                    ate[cls] = torch.cat((ate[cls], torch.Tensor(ate_local)))
+                    aoe[cls] = torch.cat((aoe[cls], torch.Tensor(aoe_local)))
+                    ase[cls] = torch.cat((ase[cls], torch.Tensor(ase_local)))
+                    ave[cls] = torch.cat((ave[cls], torch.Tensor(ave_local)))
+
+                    num_gt_boxes[cls] += len(gt_box_corners)
 
             for cls in range(num_classes):
                 sorted_indices = torch.argsort(-scores[cls])
@@ -633,13 +742,26 @@ class SimBEVDetectionEval:
 
                 aps[cls, k] = torch.trapz(precisions, recalls)
 
+                ates[cls, k] = ate[cls].mean()
+                aoes[cls, k] = aoe[cls].mean()
+                ases[cls, k] = ase[cls].mean()
+                aves[cls, k] = ave[cls].mean()
+
         metrics = {}
         
         for index, name in enumerate(self.classes):
             metrics[f'det/{name}/AP@max'] = aps[index].max().item()
+            metrics[f'det/{name}/ATE@max'] = ates[index].mean().item()
+            metrics[f'det/{name}/AOE@max'] = aoes[index].mean().item()
+            metrics[f'det/{name}/ASE@max'] = ases[index].mean().item()
+            metrics[f'det/{name}/AVE@max'] = aves[index].mean().item()
             
-            for threshold, ap in zip(self.iou_thresholds, aps[index]):
+            for threshold, ap, ate, aoe, ase, ave in zip(self.iou_thresholds, aps[index], ates[index], aoes[index], ases[index], aves[index]):
                 metrics[f'det/{name}/AP@{threshold:.2f}'] = ap.item()
+                metrics[f'det/{name}/ATE@{threshold:.2f}'] = ate.item()
+                metrics[f'det/{name}/AOE@{threshold:.2f}'] = aoe.item()
+                metrics[f'det/{name}/ASE@{threshold:.2f}'] = ase.item()
+                metrics[f'det/{name}/AVE@{threshold:.2f}'] = ave.item()
         
         metrics['det/mean/AP@max'] = aps.max(dim=1).values.mean().item()
 
