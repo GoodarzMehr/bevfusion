@@ -65,7 +65,7 @@ class SimBEVDataset(Dataset):
         filter_empty_gt=True,
         with_velocity=True,
         use_valid_flag=False,
-        load_interval=32,
+        load_interval=256,
         box_type_3d='LiDAR'
     ):
         super().__init__()
@@ -522,6 +522,11 @@ class SimBEVDataset(Dataset):
         for index, threshold in enumerate(thresholds):
             metrics[f'map/mean/IoU@{threshold.item():.2f}'] = ious[:, index].mean().item()
         
+        print('{:<12} {:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}'.format('AVE', '0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9'))
+
+        for index, name in enumerate(self.map_classes):
+            print(f'{name:<12}', ''.join([f'{iou:>8.4f}' for iou in ious[index].tolist()]))
+        
         return metrics
     
     def evaluate(self, results, **kwargs):
@@ -694,7 +699,7 @@ class SimBEVDetectionEval:
                             if diff_angle > np.pi:
                                 diff_angle = diff_angle - 2 * np.pi
 
-                            aoe_local.append(diff_angle)
+                            aoe_local.append(abs(diff_angle))
 
                             pred_wlh = pred_boxes[i].tensor[0, 3:6]
                             gt_wlh = gt_boxes[max_gt_idx].tensor[0, 3:6]
@@ -751,10 +756,10 @@ class SimBEVDetectionEval:
         
         for index, name in enumerate(self.classes):
             metrics[f'det/{name}/AP@max'] = aps[index].max().item()
-            metrics[f'det/{name}/ATE@max'] = ates[index].mean().item()
-            metrics[f'det/{name}/AOE@max'] = aoes[index].mean().item()
-            metrics[f'det/{name}/ASE@max'] = ases[index].mean().item()
-            metrics[f'det/{name}/AVE@max'] = aves[index].mean().item()
+            metrics[f'det/{name}/ATE@max'] = ates[index].max().item()
+            metrics[f'det/{name}/AOE@max'] = aoes[index].max().item()
+            metrics[f'det/{name}/ASE@max'] = ases[index].max().item()
+            metrics[f'det/{name}/AVE@max'] = aves[index].max().item()
             
             for threshold, ap, ate, aoe, ase, ave in zip(self.iou_thresholds, aps[index], ates[index], aoes[index], ases[index], aves[index]):
                 metrics[f'det/{name}/AP@{threshold:.2f}'] = ap.item()
@@ -765,4 +770,39 @@ class SimBEVDetectionEval:
         
         metrics['det/mean/AP@max'] = aps.max(dim=1).values.mean().item()
 
+        print('{:<12} {:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}'.format('AP', '0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9'))
+
+        for index, name in enumerate(self.classes):
+            print(f'{name:<12}', ''.join([f'{ap:<8.4f}' for ap in aps[index].tolist()]))
+        
+        print('')
+
+        print('{:<12} {:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}'.format('ATE', '0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9'))
+
+        for index, name in enumerate(self.classes):
+            print(f'{name:<12}', ''.join([f'{ate:<8.4f}' for ate in ates[index].tolist()]))
+        
+        print('')
+
+        print('{:<12} {:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}'.format('AOE', '0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9'))
+
+        for index, name in enumerate(self.classes):
+            print(f'{name:<12}', ''.join([f'{aoe:<8.4f}' for aoe in aoes[index].tolist()]))
+        
+        print('')
+
+        print('{:<12} {:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}'.format('ASE', '0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9'))
+
+        for index, name in enumerate(self.classes):
+            print(f'{name:<12}', ''.join([f'{ase:<8.4f}' for ase in ases[index].tolist()]))
+        
+        print('')
+
+        print('{:<12} {:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}'.format('AVE', '0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9'))
+
+        for index, name in enumerate(self.classes):
+            print(f'{name:<12}', ''.join([f'{ave:<8.4f}' for ave in aves[index].tolist()]))
+        
+        print('')
+        
         return metrics
