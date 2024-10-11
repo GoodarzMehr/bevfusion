@@ -1,6 +1,8 @@
 import mmcv
 import torch
 
+import time
+
 import numpy as np
 
 from .pipelines import Compose
@@ -65,7 +67,7 @@ class SimBEVDataset(Dataset):
         filter_empty_gt=True,
         with_velocity=True,
         use_valid_flag=False,
-        load_interval=256,
+        load_interval=32,
         box_type_3d='LiDAR'
     ):
         super().__init__()
@@ -522,14 +524,13 @@ class SimBEVDataset(Dataset):
         for index, threshold in enumerate(thresholds):
             metrics[f'map/mean/IoU@{threshold.item():.2f}'] = ious[:, index].mean().item()
         
+        # Print IoU table.
         print(f'{"IoU":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
 
         for index, name in enumerate(self.map_classes):
             print(f'{name:<12}', ''.join([f'{iou:<8.4f}' for iou in ious[index].tolist()]))
         
-        print(f'{"mIoU":<12}', ''.join([f'{iou:<8.4f}' for iou in ious.mean(dim=0).tolist()]))
-
-        print('')
+        print(f'{"mIoU":<12}', ''.join([f'{iou:<8.4f}' for iou in ious.mean(dim=0).tolist()]), '\n')
         
         return metrics
     
@@ -595,24 +596,49 @@ class SimBEVDataset(Dataset):
 
 
 class SimBEVDetectionEval:
+    '''
+    Class that evaluates 3D object detection results on the SimBEV dataset.
+
+    Args:
+        results: results from the model.
+        classes: list of object classes in the dataset.
+        iou_thresholds: list of IoU thresholds for evaluation.
+    '''
     def __init__(self, results, classes, iou_thresholds=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]):
         self.results = results
         self.classes = classes
         self.iou_thresholds = iou_thresholds
 
     def evaluate(self):
+        '''
+        Evaluate 3D object detection results.
+        '''
         num_classes = len(self.classes)
         num_thresholds = len(self.iou_thresholds)
 
+        # Tensor to store Average Precision (AP) for each class and IoU
+        # threshold.
         aps = torch.zeros((num_classes, num_thresholds))
 
+        # Tensors to store True Positive (TP) metrics Average Translation
+        # Error (ATE), Average Orientation Error (AOE), Average Scale Error
+        # (ASE) and Average Velocity Error (AVE) for each class and IoU
+        # threshold.
         ates = torch.zeros((num_classes, num_thresholds))
         aoes = torch.zeros((num_classes, num_thresholds))
         ases = torch.zeros((num_classes, num_thresholds))
         aves = torch.zeros((num_classes, num_thresholds))
 
-        for k, threshold in enumerate(self.iou_thresholds):
+        device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
 
+        timer = CustomTimer()
+
+        for k, threshold in enumerate(self.iou_thresholds):
+            start = timer.time()
+
+            # Dictionaries to store True Positive (TP) and False Positive (FP)
+            # values, scores, ATE, AOE, ASE, AVE, and the total number of
+            # ground truth boxes for each class.
             tps = {i: torch.empty((0, )) for i in range(num_classes)}
             fps = {i: torch.empty((0, )) for i in range(num_classes)}
 
@@ -641,7 +667,7 @@ class SimBEVDetectionEval:
                     gt_boxes_3d_corners = gt_boxes_3d.corners
                 else:
                     gt_boxes_3d_corners = torch.empty((0, 8, 3))
-                
+
                 for cls in range(num_classes):
                     pred_mask = labels_3d == cls
                     
@@ -663,13 +689,13 @@ class SimBEVDetectionEval:
                     pred_scores = pred_scores[sorted_indices]
 
                     if len(pred_box_corners) == 0:
-                        ious = torch.zeros((0, len(gt_box_corners)))
+                        ious = torch.zeros((0, len(gt_box_corners))).to(device)
                     elif len(gt_box_corners) == 0:
-                        ious = torch.zeros((len(pred_box_corners), 0))
+                        ious = torch.zeros((len(pred_box_corners), 0)).to(device)
                     else:
-                        _, ious = box3d_overlap(pred_box_corners, gt_box_corners)
+                        _, ious = box3d_overlap(pred_box_corners.to(device), gt_box_corners.to(device), eps=4e-2)
 
-                    assigned_gt = torch.zeros(len(gt_box_corners), dtype=torch.bool)
+                    assigned_gt = torch.zeros(len(gt_box_corners), dtype=torch.bool).to(device)
 
                     tp = torch.zeros(len(pred_box_corners))
                     fp = torch.zeros(len(pred_box_corners))
@@ -679,17 +705,16 @@ class SimBEVDetectionEval:
                     ase_local = []
                     ave_local = []
 
-                    for i, pred_box in enumerate(pred_box_corners):
-                        iou_max = 0
-                        max_gt_idx = -1
+                    for i, pred_box in enumerate(pred_box_corners):                        
+                        available_ious = ious[i] * ~assigned_gt
 
-                        for j, gt_box in enumerate(gt_box_corners):
-                            if not assigned_gt[j]:
-                                iou = ious[i, j]
-                                
-                                if iou > iou_max:
-                                    iou_max = iou
-                                    max_gt_idx = j
+                        if available_ious.shape[0] > 0:
+                            iou_max, max_gt_idx = available_ious.max(dim=0)
+
+                            max_gt_idx = max_gt_idx.item()
+                        else:
+                            iou_max = 0
+                            max_gt_idx = -1
                         
                         if iou_max >= threshold:
                             tp[i] = 1
@@ -756,6 +781,10 @@ class SimBEVDetectionEval:
                 ases[cls, k] = ase[cls].mean()
                 aves[cls, k] = ave[cls].mean()
 
+            finish = timer.time()
+
+            print('Total: ', finish - start)
+
         metrics = {}
         
         for index, name in enumerate(self.classes):
@@ -782,62 +811,52 @@ class SimBEVDetectionEval:
         print(f'{"mAP":<12}', ''.join([f'{ap:<8.4f}' for ap in aps.nanmean(dim=0).tolist()]))
 
         mAP = aps[:, 4:].nanmean().item()
-
-        print('mAP: ', mAP)
         
-        print('')
+        print('\nmAP: ', mAP, '\n')
 
         print(f'{"ATE":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
 
         for index, name in enumerate(self.classes):
             print(f'{name:<12}', ''.join([f'{ate:<8.4f}' for ate in ates[index].tolist()]))
         
-        print(f'{"ATE":<12}', ''.join([f'{ate:<8.4f}' for ate in ates.nanmean(dim=0).tolist()]))
+        print(f'{"mATE":<12}', ''.join([f'{ate:<8.4f}' for ate in ates.nanmean(dim=0).tolist()]))
 
         mATE = ates[:, 4:].nanmean().item()
 
-        print('mATE: ', mATE)
-        
-        print('')
+        print('\nmATE: ', mATE, '\n')
 
         print(f'{"AOE":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
 
         for index, name in enumerate(self.classes):
             print(f'{name:<12}', ''.join([f'{aoe:<8.4f}' for aoe in aoes[index].tolist()]))
         
-        print(f'{"AOE":<12}', ''.join([f'{aoe:<8.4f}' for aoe in aoes.nanmean(dim=0).tolist()]))
+        print(f'{"mAOE":<12}', ''.join([f'{aoe:<8.4f}' for aoe in aoes.nanmean(dim=0).tolist()]))
 
         mAOE = aoes[:, 4:].nanmean().item()
 
-        print('mAOE: ', mAOE)
-        
-        print('')
+        print('\nmAOE: ', mAOE, '\n')
 
         print(f'{"ASE":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
 
         for index, name in enumerate(self.classes):
             print(f'{name:<12}', ''.join([f'{ase:<8.4f}' for ase in ases[index].tolist()]))
         
-        print(f'{"ASE":<12}', ''.join([f'{ase:<8.4f}' for ase in ases.nanmean(dim=0).tolist()]))
+        print(f'{"mASE":<12}', ''.join([f'{ase:<8.4f}' for ase in ases.nanmean(dim=0).tolist()]))
 
         mASE = ases[:, 4:].nanmean().item()
 
-        print('mASE: ', mASE)
-        
-        print('')
+        print('\nmASE: ', mASE, '\n')
 
         print(f'{"AVE":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
 
         for index, name in enumerate(self.classes):
             print(f'{name:<12}', ''.join([f'{ave:<8.4f}' for ave in aves[index].tolist()]))
         
-        print(f'{"AVE":<12}', ''.join([f'{ave:<8.4f}' for ave in aves.nanmean(dim=0).tolist()]))
+        print(f'{"mAVE":<12}', ''.join([f'{ave:<8.4f}' for ave in aves.nanmean(dim=0).tolist()]))
 
         mAVE = aves[:, 4:].nanmean().item()
 
-        print('mAVE: ', mAVE)
-        
-        print('')
+        print('\nmAVE: ', mAVE, '\n')
 
         mATE = max(0.0, 1 - mATE)
         mAOE = max(0.0, 1 - mAOE)
@@ -846,6 +865,22 @@ class SimBEVDetectionEval:
 
         SimBEVDetectionScore = (4 * mAP + mATE + mAOE + mASE + mAVE) / 8
 
-        print('SDS: ', SimBEVDetectionScore)
+        print('SDS: ', SimBEVDetectionScore, '\n')
         
         return metrics
+
+
+class CustomTimer:
+    '''
+    Timer class that uses a performance counter if available, otherwise time
+    in seconds.
+    '''
+    
+    def __init__(self):
+        try:
+            self.timer = time.perf_counter
+        except AttributeError:
+            self.timer = time.time
+
+    def time(self):
+        return self.timer()
