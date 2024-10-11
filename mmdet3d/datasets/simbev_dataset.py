@@ -522,10 +522,14 @@ class SimBEVDataset(Dataset):
         for index, threshold in enumerate(thresholds):
             metrics[f'map/mean/IoU@{threshold.item():.2f}'] = ious[:, index].mean().item()
         
-        print('{:<12} {:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}'.format('AVE', '0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9'))
+        print(f'{"IoU":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
 
         for index, name in enumerate(self.map_classes):
-            print(f'{name:<12}', ''.join([f'{iou:>8.4f}' for iou in ious[index].tolist()]))
+            print(f'{name:<12}', ''.join([f'{iou:<8.4f}' for iou in ious[index].tolist()]))
+        
+        print(f'{"mIoU":<12}', ''.join([f'{iou:<8.4f}' for iou in ious.mean(dim=0).tolist()]))
+
+        print('')
         
         return metrics
     
@@ -770,39 +774,78 @@ class SimBEVDetectionEval:
         
         metrics['det/mean/AP@max'] = aps.max(dim=1).values.mean().item()
 
-        print('{:<12} {:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}'.format('AP', '0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9'))
+        print(f'{"AP":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
 
         for index, name in enumerate(self.classes):
             print(f'{name:<12}', ''.join([f'{ap:<8.4f}' for ap in aps[index].tolist()]))
         
+        print(f'{"mAP":<12}', ''.join([f'{ap:<8.4f}' for ap in aps.nanmean(dim=0).tolist()]))
+
+        mAP = aps[:, 4:].nanmean().item()
+
+        print('mAP: ', mAP)
+        
         print('')
 
-        print('{:<12} {:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}'.format('ATE', '0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9'))
+        print(f'{"ATE":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
 
         for index, name in enumerate(self.classes):
             print(f'{name:<12}', ''.join([f'{ate:<8.4f}' for ate in ates[index].tolist()]))
         
+        print(f'{"ATE":<12}', ''.join([f'{ate:<8.4f}' for ate in ates.nanmean(dim=0).tolist()]))
+
+        mATE = ates[:, 4:].nanmean().item()
+
+        print('mATE: ', mATE)
+        
         print('')
 
-        print('{:<12} {:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}'.format('AOE', '0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9'))
+        print(f'{"AOE":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
 
         for index, name in enumerate(self.classes):
             print(f'{name:<12}', ''.join([f'{aoe:<8.4f}' for aoe in aoes[index].tolist()]))
         
+        print(f'{"AOE":<12}', ''.join([f'{aoe:<8.4f}' for aoe in aoes.nanmean(dim=0).tolist()]))
+
+        mAOE = aoes[:, 4:].nanmean().item()
+
+        print('mAOE: ', mAOE)
+        
         print('')
 
-        print('{:<12} {:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}'.format('ASE', '0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9'))
+        print(f'{"ASE":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
 
         for index, name in enumerate(self.classes):
             print(f'{name:<12}', ''.join([f'{ase:<8.4f}' for ase in ases[index].tolist()]))
         
+        print(f'{"ASE":<12}', ''.join([f'{ase:<8.4f}' for ase in ases.nanmean(dim=0).tolist()]))
+
+        mASE = ases[:, 4:].nanmean().item()
+
+        print('mASE: ', mASE)
+        
         print('')
 
-        print('{:<12} {:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}{:<8}'.format('AVE', '0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9'))
+        print(f'{"AVE":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
 
         for index, name in enumerate(self.classes):
             print(f'{name:<12}', ''.join([f'{ave:<8.4f}' for ave in aves[index].tolist()]))
         
+        print(f'{"AVE":<12}', ''.join([f'{ave:<8.4f}' for ave in aves.nanmean(dim=0).tolist()]))
+
+        mAVE = aves[:, 4:].nanmean().item()
+
+        print('mAVE: ', mAVE)
+        
         print('')
+
+        mATE = max(0.0, 1 - mATE)
+        mAOE = max(0.0, 1 - mAOE)
+        mASE = max(0.0, 1 - mASE)
+        mAVE = max(0.0, 1 - mAVE)
+
+        SimBEVDetectionScore = (4 * mAP + mATE + mAOE + mASE + mAVE) / 8
+
+        print('SDS: ', SimBEVDetectionScore)
         
         return metrics
