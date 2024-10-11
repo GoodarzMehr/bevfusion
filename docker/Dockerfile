@@ -87,6 +87,6 @@ yapf==0.40.1 matplotlib opencv-python open3d ninja -f https://download.pytorch.o
 RUN pip uninstall mmcv mmcv-full -y
 RUN MMCV_WITH_OPS=1 FORCE_CUDA=1 pip install --no-cache-dir mmcv==1.4.0 mmcv-full==1.4.0
 
-RUN pip install --no-cache-dir "git+https://github.com/facebookresearch/pytorch3d.git@v0.6.0"
+RUN pip install --no-cache-dir "git+https://github.com/facebookresearch/pytorch3d.git@v0.6.2"
 
 USER ${USER}
