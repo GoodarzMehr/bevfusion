@@ -1,8 +1,6 @@
 import mmcv
 import torch
 
-import time
-
 import numpy as np
 
 from .pipelines import Compose
@@ -67,7 +65,7 @@ class SimBEVDataset(Dataset):
         filter_empty_gt=True,
         with_velocity=True,
         use_valid_flag=False,
-        load_interval=32,
+        load_interval=256,
         box_type_3d='LiDAR'
     ):
         super().__init__()
@@ -616,25 +614,25 @@ class SimBEVDetectionEval:
         num_classes = len(self.classes)
         num_thresholds = len(self.iou_thresholds)
 
-        # Tensor to store Average Precision (AP) for each class and IoU
-        # threshold.
-        aps = torch.zeros((num_classes, num_thresholds))
+        # # Tensor to store Average Precision (AP) for each class and IoU
+        # # threshold.
+        # aps = torch.zeros((num_classes, num_thresholds))
 
-        # Tensors to store True Positive (TP) metrics Average Translation
-        # Error (ATE), Average Orientation Error (AOE), Average Scale Error
-        # (ASE) and Average Velocity Error (AVE) for each class and IoU
-        # threshold.
-        ates = torch.zeros((num_classes, num_thresholds))
-        aoes = torch.zeros((num_classes, num_thresholds))
-        ases = torch.zeros((num_classes, num_thresholds))
-        aves = torch.zeros((num_classes, num_thresholds))
+        # # Tensors to store True Positive (TP) metrics Average Translation
+        # # Error (ATE), Average Orientation Error (AOE), Average Scale Error
+        # # (ASE) and Average Velocity Error (AVE) for each class and IoU
+        # # threshold.
+        # ates = torch.zeros((num_classes, num_thresholds))
+        # aoes = torch.zeros((num_classes, num_thresholds))
+        # ases = torch.zeros((num_classes, num_thresholds))
+        # aves = torch.zeros((num_classes, num_thresholds))
+
+        det_metrics = {item: torch.zeros((num_classes, num_thresholds)) for item in ['AP', 'ATE', 'AOE', 'ASE', 'AVE']}
 
         device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
 
-        timer = CustomTimer()
-
         for k, threshold in enumerate(self.iou_thresholds):
-            start = timer.time()
+            print(f'Calculating metrics for IoU threshold {threshold}...')
 
             # Dictionaries to store True Positive (TP) and False Positive (FP)
             # values, scores, ATE, AOE, ASE, AVE, and the total number of
@@ -710,7 +708,6 @@ class SimBEVDetectionEval:
 
                         if available_ious.shape[0] > 0:
                             iou_max, max_gt_idx = available_ious.max(dim=0)
-
                             max_gt_idx = max_gt_idx.item()
                         else:
                             iou_max = 0
@@ -774,113 +771,142 @@ class SimBEVDetectionEval:
                 recalls = torch.cat((torch.Tensor([0.0]), recalls))
                 precisions = torch.cat((torch.Tensor([1.0]), precisions))
 
-                aps[cls, k] = torch.trapz(precisions, recalls)
+                # aps[cls, k] = torch.trapz(precisions, recalls)
 
-                ates[cls, k] = ate[cls].mean()
-                aoes[cls, k] = aoe[cls].mean()
-                ases[cls, k] = ase[cls].mean()
-                aves[cls, k] = ave[cls].mean()
+                # ates[cls, k] = ate[cls].mean()
+                # aoes[cls, k] = aoe[cls].mean()
+                # ases[cls, k] = ase[cls].mean()
+                # aves[cls, k] = ave[cls].mean()
 
-            finish = timer.time()
+                det_metrics['AP'][cls, k] = torch.trapz(precisions, recalls)
 
-            print('Total: ', finish - start)
+                for item, value in zip(['ATE', 'AOE', 'ASE', 'AVE'], [ate, aoe, ase, ave]):
+                    det_metrics[item][cls, k] = value[cls].mean()
 
         metrics = {}
+
+        mean_metrics = {}
+
+        for item in ['AP', 'ATE', 'AOE', 'ASE', 'AVE']:
+            for index, name in enumerate(self.classes):
+                metrics[f'det/{name}/{item}@max'] = det_metrics[item][index].max().item()
+
+                for threshold, value in zip(self.iou_thresholds, det_metrics[item][index]):
+                    metrics[f'det/{name}/{item}@{threshold:.2f}'] = value.item()
         
-        for index, name in enumerate(self.classes):
-            metrics[f'det/{name}/AP@max'] = aps[index].max().item()
-            metrics[f'det/{name}/ATE@max'] = ates[index].max().item()
-            metrics[f'det/{name}/AOE@max'] = aoes[index].max().item()
-            metrics[f'det/{name}/ASE@max'] = ases[index].max().item()
-            metrics[f'det/{name}/AVE@max'] = aves[index].max().item()
+            for index, threshold in enumerate(self.iou_thresholds):
+                metrics[f'det/mean/{item}@{threshold:.2f}'] = det_metrics[item][:, index].mean().item()
             
-            for threshold, ap, ate, aoe, ase, ave in zip(self.iou_thresholds, aps[index], ates[index], aoes[index], ases[index], aves[index]):
-                metrics[f'det/{name}/AP@{threshold:.2f}'] = ap.item()
-                metrics[f'det/{name}/ATE@{threshold:.2f}'] = ate.item()
-                metrics[f'det/{name}/AOE@{threshold:.2f}'] = aoe.item()
-                metrics[f'det/{name}/ASE@{threshold:.2f}'] = ase.item()
-                metrics[f'det/{name}/AVE@{threshold:.2f}'] = ave.item()
+            print(f'{item:<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
+
+            for index, name in enumerate(self.classes):
+                print(f'{name:<12}', ''.join([f'{value:<8.4f}' for value in det_metrics[item][index].tolist()]))
+            
+            print(f'm{item:<11}', ''.join([f'{value:<8.4f}' for value in det_metrics[item].nanmean(dim=0).tolist()]), '\n')
+
+            mean_metrics[f'm{item}'] = det_metrics[item][:, 4:].nanmean().item()
+
+            metrics[f'det/m{item}'] = mean_metrics[f'm{item}']
+
+            print(f'm{item}: ', mean_metrics[f'm{item}'], '\n')
         
-        metrics['det/mean/AP@max'] = aps.max(dim=1).values.mean().item()
-
-        print(f'{"AP":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
-
-        for index, name in enumerate(self.classes):
-            print(f'{name:<12}', ''.join([f'{ap:<8.4f}' for ap in aps[index].tolist()]))
+        # for index, name in enumerate(self.classes):
+        #     metrics[f'det/{name}/AP@max'] = aps[index].max().item()
+        #     metrics[f'det/{name}/ATE@max'] = ates[index].max().item()
+        #     metrics[f'det/{name}/AOE@max'] = aoes[index].max().item()
+        #     metrics[f'det/{name}/ASE@max'] = ases[index].max().item()
+        #     metrics[f'det/{name}/AVE@max'] = aves[index].max().item()
+            
+        #     for threshold, ap, ate, aoe, ase, ave in zip(self.iou_thresholds, aps[index], ates[index], aoes[index], ases[index], aves[index]):
+        #         metrics[f'det/{name}/AP@{threshold:.2f}'] = ap.item()
+        #         metrics[f'det/{name}/ATE@{threshold:.2f}'] = ate.item()
+        #         metrics[f'det/{name}/AOE@{threshold:.2f}'] = aoe.item()
+        #         metrics[f'det/{name}/ASE@{threshold:.2f}'] = ase.item()
+        #         metrics[f'det/{name}/AVE@{threshold:.2f}'] = ave.item()
         
-        print(f'{"mAP":<12}', ''.join([f'{ap:<8.4f}' for ap in aps.nanmean(dim=0).tolist()]))
+        # metrics['det/mean/AP@max'] = aps.max(dim=1).values.mean().item()
 
-        mAP = aps[:, 4:].nanmean().item()
+        # for index, threshold in enumerate(self.iou_thresholds):
+        #     metrics[f'det/mean/AP@{threshold:.2f}'] = aps[:, index].nanmean().item()
+        #     metrics[f'det/mean/ATE@{threshold:.2f}'] = ates[:, index].nanmean().item()
+        #     metrics[f'det/mean/AOE@{threshold:.2f}'] = aoes[:, index].nanmean().item()
+        #     metrics[f'det/mean/ASE@{threshold:.2f}'] = ases[:, index].nanmean().item()
+        #     metrics[f'det/mean/AVE@{threshold:.2f}'] = aves[:, index].nanmean().item()
         
-        print('\nmAP: ', mAP, '\n')
+        # print(f'{"AP":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
 
-        print(f'{"ATE":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
-
-        for index, name in enumerate(self.classes):
-            print(f'{name:<12}', ''.join([f'{ate:<8.4f}' for ate in ates[index].tolist()]))
+        # for index, name in enumerate(self.classes):
+        #     print(f'{name:<12}', ''.join([f'{ap:<8.4f}' for ap in aps[index].tolist()]))
         
-        print(f'{"mATE":<12}', ''.join([f'{ate:<8.4f}' for ate in ates.nanmean(dim=0).tolist()]))
+        # print(f'{"mAP":<12}', ''.join([f'{ap:<8.4f}' for ap in aps.nanmean(dim=0).tolist()]))
 
-        mATE = ates[:, 4:].nanmean().item()
+        # mAP = aps[:, 4:].nanmean().item()
 
-        print('\nmATE: ', mATE, '\n')
-
-        print(f'{"AOE":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
-
-        for index, name in enumerate(self.classes):
-            print(f'{name:<12}', ''.join([f'{aoe:<8.4f}' for aoe in aoes[index].tolist()]))
+        # metrics['det/mAP'] = mAP
         
-        print(f'{"mAOE":<12}', ''.join([f'{aoe:<8.4f}' for aoe in aoes.nanmean(dim=0).tolist()]))
+        # print('\nmAP: ', mAP, '\n')
 
-        mAOE = aoes[:, 4:].nanmean().item()
+        # print(f'{"ATE":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
 
-        print('\nmAOE: ', mAOE, '\n')
-
-        print(f'{"ASE":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
-
-        for index, name in enumerate(self.classes):
-            print(f'{name:<12}', ''.join([f'{ase:<8.4f}' for ase in ases[index].tolist()]))
+        # for index, name in enumerate(self.classes):
+        #     print(f'{name:<12}', ''.join([f'{ate:<8.4f}' for ate in ates[index].tolist()]))
         
-        print(f'{"mASE":<12}', ''.join([f'{ase:<8.4f}' for ase in ases.nanmean(dim=0).tolist()]))
+        # print(f'{"mATE":<12}', ''.join([f'{ate:<8.4f}' for ate in ates.nanmean(dim=0).tolist()]))
 
-        mASE = ases[:, 4:].nanmean().item()
+        # mATE = ates[:, 4:].nanmean().item()
 
-        print('\nmASE: ', mASE, '\n')
+        # metrics['det/mATE'] = mATE
 
-        print(f'{"AVE":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
+        # print('\nmATE: ', mATE, '\n')
 
-        for index, name in enumerate(self.classes):
-            print(f'{name:<12}', ''.join([f'{ave:<8.4f}' for ave in aves[index].tolist()]))
+        # print(f'{"AOE":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
+
+        # for index, name in enumerate(self.classes):
+        #     print(f'{name:<12}', ''.join([f'{aoe:<8.4f}' for aoe in aoes[index].tolist()]))
         
-        print(f'{"mAVE":<12}', ''.join([f'{ave:<8.4f}' for ave in aves.nanmean(dim=0).tolist()]))
+        # print(f'{"mAOE":<12}', ''.join([f'{aoe:<8.4f}' for aoe in aoes.nanmean(dim=0).tolist()]))
 
-        mAVE = aves[:, 4:].nanmean().item()
+        # mAOE = aoes[:, 4:].nanmean().item()
 
-        print('\nmAVE: ', mAVE, '\n')
+        # metrics['det/mAOE'] = mAOE
 
-        mATE = max(0.0, 1 - mATE)
-        mAOE = max(0.0, 1 - mAOE)
-        mASE = max(0.0, 1 - mASE)
-        mAVE = max(0.0, 1 - mAVE)
+        # print('\nmAOE: ', mAOE, '\n')
 
-        SimBEVDetectionScore = (4 * mAP + mATE + mAOE + mASE + mAVE) / 8
+        # print(f'{"ASE":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
+
+        # for index, name in enumerate(self.classes):
+        #     print(f'{name:<12}', ''.join([f'{ase:<8.4f}' for ase in ases[index].tolist()]))
+        
+        # print(f'{"mASE":<12}', ''.join([f'{ase:<8.4f}' for ase in ases.nanmean(dim=0).tolist()]))
+
+        # mASE = ases[:, 4:].nanmean().item()
+
+        # metrics['det/mASE'] = mASE
+
+        # print('\nmASE: ', mASE, '\n')
+
+        # print(f'{"AVE":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
+
+        # for index, name in enumerate(self.classes):
+        #     print(f'{name:<12}', ''.join([f'{ave:<8.4f}' for ave in aves[index].tolist()]))
+        
+        # print(f'{"mAVE":<12}', ''.join([f'{ave:<8.4f}' for ave in aves.nanmean(dim=0).tolist()]))
+
+        # mAVE = aves[:, 4:].nanmean().item()
+
+        # metrics['det/mAVE'] = mAVE
+
+        # print('\nmAVE: ', mAVE, '\n')
+
+        mATE = max(0.0, 1 - mean_metrics['mATE'])
+        mAOE = max(0.0, 1 - mean_metrics['mAOE'])
+        mASE = max(0.0, 1 - mean_metrics['mASE'])
+        mAVE = max(0.0, 1 - mean_metrics['mAVE'])
+
+        SimBEVDetectionScore = (4 * mean_metrics['mAP'] + mATE + mAOE + mASE + mAVE) / 8
+
+        metrics['det/SDS'] = SimBEVDetectionScore
 
         print('SDS: ', SimBEVDetectionScore, '\n')
         
         return metrics
-
-
-class CustomTimer:
-    '''
-    Timer class that uses a performance counter if available, otherwise time
-    in seconds.
-    '''
-    
-    def __init__(self):
-        try:
-            self.timer = time.perf_counter
-        except AttributeError:
-            self.timer = time.time
-
-    def time(self):
-        return self.timer()
