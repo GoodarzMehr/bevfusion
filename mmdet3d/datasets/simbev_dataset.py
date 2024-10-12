@@ -65,7 +65,7 @@ class SimBEVDataset(Dataset):
         filter_empty_gt=True,
         with_velocity=True,
         use_valid_flag=False,
-        load_interval=64,
+        load_interval=4,
         box_type_3d='LiDAR'
     ):
         super().__init__()
@@ -614,19 +614,6 @@ class SimBEVDetectionEval:
         num_classes = len(self.classes)
         num_thresholds = len(self.iou_thresholds)
 
-        # # Tensor to store Average Precision (AP) for each class and IoU
-        # # threshold.
-        # aps = torch.zeros((num_classes, num_thresholds))
-
-        # # Tensors to store True Positive (TP) metrics Average Translation
-        # # Error (ATE), Average Orientation Error (AOE), Average Scale Error
-        # # (ASE) and Average Velocity Error (AVE) for each class and IoU
-        # # threshold.
-        # ates = torch.zeros((num_classes, num_thresholds))
-        # aoes = torch.zeros((num_classes, num_thresholds))
-        # ases = torch.zeros((num_classes, num_thresholds))
-        # aves = torch.zeros((num_classes, num_thresholds))
-
         # Dictionary to store Average Precision (AP), Average Translation
         # Error (ATE), Average Orientation Error (AOE), Average Scale Error
         # (ASE), and Average Velocity Error (AVE) for each class and IoU
@@ -741,15 +728,33 @@ class SimBEVDetectionEval:
 
                             assigned_gt[max_gt_idx] = True
 
-                            ate_local.append(torch.linalg.vector_norm(pred_boxes[i].tensor[0, :3] - gt_boxes[max_gt_idx].tensor[0, :3]))
+                            # Calculate ATE, which is the Euclidean distance
+                            # between the predicted and ground truth bounding
+                            # box centers.
+                            ate_local.append(
+                                torch.linalg.vector_norm(
+                                    pred_boxes[i].tensor[0, :3] - gt_boxes[max_gt_idx].tensor[0, :3]
+                                )
+                            )
 
-                            diff_angle = (gt_boxes[max_gt_idx].tensor[0, 6] - pred_boxes[i].tensor[0, 6] + np.pi) % (2 * np.pi) - np.pi
+                            # Calculate AOE, which is the smallest yaw angle
+                            # between the predicted and ground truth bounding
+                            # boxes.
+                            diff_angle = (
+                                gt_boxes[max_gt_idx].tensor[0, 6] - pred_boxes[i].tensor[0, 6] + np.pi
+                            ) % (2 * np.pi) - np.pi
 
+                            # Ensure the angle difference is between -pi and
+                            # pi.
                             if diff_angle > np.pi:
                                 diff_angle = diff_angle - 2 * np.pi
 
                             aoe_local.append(abs(diff_angle))
 
+                            # Calculate ASE, which is defined as 1 - IOU after
+                            # the predicted and ground truth bounding boxes
+                            # are translated and rotated to have the same
+                            # center and orientation.
                             pred_wlh = pred_boxes[i].tensor[0, 3:6]
                             gt_wlh = gt_boxes[max_gt_idx].tensor[0, 3:6]
 
@@ -757,13 +762,21 @@ class SimBEVDetectionEval:
 
                             pred_vol = torch.prod(pred_wlh)
                             gt_vol = torch.prod(gt_wlh)
+                            
                             intersection = torch.prod(min_wlh)
 
                             union = pred_vol + gt_vol - intersection
 
                             ase_local.append(1 - intersection / union)
 
-                            ave_local.append(torch.linalg.vector_norm(pred_boxes[i].tensor[0, -2:] - gt_boxes[max_gt_idx].tensor[0, -2:]))
+                            # Calculate AVE, which is the L2 norm of the
+                            # difference between the predicted and ground
+                            # truth bounding box velocities.
+                            ave_local.append(
+                                torch.linalg.vector_norm(
+                                    pred_boxes[i].tensor[0, -2:] - gt_boxes[max_gt_idx].tensor[0, -2:]
+                                )
+                            )
                         else:
                             fp[i] = 1
                     
@@ -780,6 +793,8 @@ class SimBEVDetectionEval:
                     num_gt_boxes[cls] += len(gt_box_corners)
 
             for cls in range(num_classes):
+                # Sort TP and FP values by confidence score in descending
+                # order.
                 sorted_indices = torch.argsort(-scores[cls])
 
                 tps[cls] = tps[cls][sorted_indices]
@@ -791,16 +806,11 @@ class SimBEVDetectionEval:
                 recalls = tps[cls] / num_gt_boxes[cls]
                 precisions = tps[cls] / (tps[cls] + fps[cls])
 
+                # Add the (0, 1) point to the precision-recall curve.
                 recalls = torch.cat((torch.Tensor([0.0]), recalls))
                 precisions = torch.cat((torch.Tensor([1.0]), precisions))
 
-                # aps[cls, k] = torch.trapz(precisions, recalls)
-
-                # ates[cls, k] = ate[cls].mean()
-                # aoes[cls, k] = aoe[cls].mean()
-                # ases[cls, k] = ase[cls].mean()
-                # aves[cls, k] = ave[cls].mean()
-
+                # AP is the area under the precision-recall curve.
                 det_metrics['AP'][cls, k] = torch.trapz(precisions, recalls)
 
                 for item, value in zip(['ATE', 'AOE', 'ASE', 'AVE'], [ate, aoe, ase, ave]):
@@ -818,108 +828,24 @@ class SimBEVDetectionEval:
                     metrics[f'det/{name}/{item}@{threshold:.2f}'] = value.item()
         
             for index, threshold in enumerate(self.iou_thresholds):
-                metrics[f'det/mean/{item}@{threshold:.2f}'] = det_metrics[item][:, index].mean().item()
+                metrics[f'det/mean/{item}@{threshold:.2f}'] = det_metrics[item][:, index].nanmean().item()
             
             print(f'{item:<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
 
             for index, name in enumerate(self.classes):
                 print(f'{name:<12}', ''.join([f'{value:<8.4f}' for value in det_metrics[item][index].tolist()]))
             
-            print(f'm{item:<11}', ''.join([f'{value:<8.4f}' for value in det_metrics[item].nanmean(dim=0).tolist()]), '\n')
+            print(
+                f'm{item:<11}',
+                ''.join([f'{value:<8.4f}' for value in det_metrics[item].nanmean(dim=0).tolist()]),
+                '\n'
+            )
 
             mean_metrics[f'm{item}'] = det_metrics[item][:, 2:].nanmean().item()
 
             metrics[f'det/m{item}'] = mean_metrics[f'm{item}']
 
             print(f'm{item}: ', mean_metrics[f'm{item}'], '\n')
-        
-        # for index, name in enumerate(self.classes):
-        #     metrics[f'det/{name}/AP@max'] = aps[index].max().item()
-        #     metrics[f'det/{name}/ATE@max'] = ates[index].max().item()
-        #     metrics[f'det/{name}/AOE@max'] = aoes[index].max().item()
-        #     metrics[f'det/{name}/ASE@max'] = ases[index].max().item()
-        #     metrics[f'det/{name}/AVE@max'] = aves[index].max().item()
-            
-        #     for threshold, ap, ate, aoe, ase, ave in zip(self.iou_thresholds, aps[index], ates[index], aoes[index], ases[index], aves[index]):
-        #         metrics[f'det/{name}/AP@{threshold:.2f}'] = ap.item()
-        #         metrics[f'det/{name}/ATE@{threshold:.2f}'] = ate.item()
-        #         metrics[f'det/{name}/AOE@{threshold:.2f}'] = aoe.item()
-        #         metrics[f'det/{name}/ASE@{threshold:.2f}'] = ase.item()
-        #         metrics[f'det/{name}/AVE@{threshold:.2f}'] = ave.item()
-        
-        # metrics['det/mean/AP@max'] = aps.max(dim=1).values.mean().item()
-
-        # for index, threshold in enumerate(self.iou_thresholds):
-        #     metrics[f'det/mean/AP@{threshold:.2f}'] = aps[:, index].nanmean().item()
-        #     metrics[f'det/mean/ATE@{threshold:.2f}'] = ates[:, index].nanmean().item()
-        #     metrics[f'det/mean/AOE@{threshold:.2f}'] = aoes[:, index].nanmean().item()
-        #     metrics[f'det/mean/ASE@{threshold:.2f}'] = ases[:, index].nanmean().item()
-        #     metrics[f'det/mean/AVE@{threshold:.2f}'] = aves[:, index].nanmean().item()
-        
-        # print(f'{"AP":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
-
-        # for index, name in enumerate(self.classes):
-        #     print(f'{name:<12}', ''.join([f'{ap:<8.4f}' for ap in aps[index].tolist()]))
-        
-        # print(f'{"mAP":<12}', ''.join([f'{ap:<8.4f}' for ap in aps.nanmean(dim=0).tolist()]))
-
-        # mAP = aps[:, 4:].nanmean().item()
-
-        # metrics['det/mAP'] = mAP
-        
-        # print('\nmAP: ', mAP, '\n')
-
-        # print(f'{"ATE":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
-
-        # for index, name in enumerate(self.classes):
-        #     print(f'{name:<12}', ''.join([f'{ate:<8.4f}' for ate in ates[index].tolist()]))
-        
-        # print(f'{"mATE":<12}', ''.join([f'{ate:<8.4f}' for ate in ates.nanmean(dim=0).tolist()]))
-
-        # mATE = ates[:, 4:].nanmean().item()
-
-        # metrics['det/mATE'] = mATE
-
-        # print('\nmATE: ', mATE, '\n')
-
-        # print(f'{"AOE":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
-
-        # for index, name in enumerate(self.classes):
-        #     print(f'{name:<12}', ''.join([f'{aoe:<8.4f}' for aoe in aoes[index].tolist()]))
-        
-        # print(f'{"mAOE":<12}', ''.join([f'{aoe:<8.4f}' for aoe in aoes.nanmean(dim=0).tolist()]))
-
-        # mAOE = aoes[:, 4:].nanmean().item()
-
-        # metrics['det/mAOE'] = mAOE
-
-        # print('\nmAOE: ', mAOE, '\n')
-
-        # print(f'{"ASE":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
-
-        # for index, name in enumerate(self.classes):
-        #     print(f'{name:<12}', ''.join([f'{ase:<8.4f}' for ase in ases[index].tolist()]))
-        
-        # print(f'{"mASE":<12}', ''.join([f'{ase:<8.4f}' for ase in ases.nanmean(dim=0).tolist()]))
-
-        # mASE = ases[:, 4:].nanmean().item()
-
-        # metrics['det/mASE'] = mASE
-
-        # print('\nmASE: ', mASE, '\n')
-
-        # print(f'{"AVE":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
-
-        # for index, name in enumerate(self.classes):
-        #     print(f'{name:<12}', ''.join([f'{ave:<8.4f}' for ave in aves[index].tolist()]))
-        
-        # print(f'{"mAVE":<12}', ''.join([f'{ave:<8.4f}' for ave in aves.nanmean(dim=0).tolist()]))
-
-        # mAVE = aves[:, 4:].nanmean().item()
-
-        # metrics['det/mAVE'] = mAVE
-
-        # print('\nmAVE: ', mAVE, '\n')
 
         mATE = max(0.0, 1 - mean_metrics['mATE'])
         mAOE = max(0.0, 1 - mean_metrics['mAOE'])
