@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 
 from ..bbox import LiDARInstance3DBoxes
 
-__all__ = ["visualize_camera", "visualize_lidar", "visualize_map", "visualize_map_carla"]
+__all__ = ["visualize_camera", "visualize_lidar", "visualize_map"]
 
 
 OBJECT_PALETTE = {
@@ -39,16 +39,16 @@ MAP_PALETTE = {
     "divider": (106, 61, 154),
 }
 
-CARLA_MAP_PALETTE = {
-    "road": (200, 32, 200),
-    "car": (16, 64, 240),
-    "truck": (64, 200, 64),
-    "bus": (40, 120, 20),
-    "motorcycle": (240, 220, 20),
-    "bicycle": (20, 240, 240),
-    "rider": (240, 160, 20),
-    # "cyclist": (240, 220, 20),
-    "pedestrian": (240, 4, 4)
+SIMBEV_PALETTE = {
+    "road": (196, 80, 196),
+    "car": (0, 128, 240),
+    "truck": (128, 240, 64),
+    "bus": (0, 144, 0),
+    "motorcycle": (240, 240, 0),
+    "cyclist": (240, 240, 20),
+    "bicycle": (0, 240, 240),
+    "rider": (240, 144, 0),
+    "pedestrian": (240, 0, 0)
 }
 
 
@@ -62,9 +62,15 @@ def visualize_camera(
     classes: Optional[List[str]] = None,
     color: Optional[Tuple[int, int, int]] = None,
     thickness: float = 4,
+    mode: str = "gt"
 ) -> None:
     canvas = image.copy()
     canvas = cv2.cvtColor(canvas, cv2.COLOR_RGB2BGR)
+
+    if "simbev" in mode:
+        PALETTE = SIMBEV_PALETTE
+    else:
+        PALETTE = OBJECT_PALETTE
 
     if bboxes is not None and len(bboxes) > 0:
         corners = bboxes.corners
@@ -111,7 +117,7 @@ def visualize_camera(
                     canvas,
                     coords[index, start].astype(np.int),
                     coords[index, end].astype(np.int),
-                    color or OBJECT_PALETTE[name],
+                    color or PALETTE[name],
                     thickness,
                     cv2.LINE_AA,
                 )
@@ -134,6 +140,7 @@ def visualize_lidar(
     color: Optional[Tuple[int, int, int]] = None,
     radius: float = 15,
     thickness: float = 25,
+    mode: str = "gt"
 ) -> None:
     fig = plt.figure(figsize=(xlim[1] - xlim[0], ylim[1] - ylim[0]))
 
@@ -142,6 +149,11 @@ def visualize_lidar(
     ax.set_ylim(*ylim)
     ax.set_aspect(1)
     ax.set_axis_off()
+
+    if "simbev" in mode:
+        PALETTE = SIMBEV_PALETTE
+    else:
+        PALETTE = OBJECT_PALETTE
 
     if lidar is not None:
         plt.scatter(
@@ -159,7 +171,7 @@ def visualize_lidar(
                 coords[index, :, 0],
                 coords[index, :, 1],
                 linewidth=thickness,
-                color=np.array(color or OBJECT_PALETTE[name]) / 255,
+                color=np.array(color or PALETTE[name]) / 255,
             )
 
     mmcv.mkdir_or_exist(os.path.dirname(fpath))
@@ -180,36 +192,21 @@ def visualize_map(
     *,
     classes: List[str],
     background: Tuple[int, int, int] = (240, 240, 240),
+    mode: str = "gt"
 ) -> None:
     assert masks.dtype == np.bool, masks.dtype
+
+    if "simbev" in mode:
+        PALETTE = SIMBEV_PALETTE
+    else:
+        PALETTE = MAP_PALETTE
 
     canvas = np.zeros((*masks.shape[-2:], 3), dtype=np.uint8)
     canvas[:] = background
 
     for k, name in enumerate(classes):
-        if name in MAP_PALETTE:
-            canvas[masks[k], :] = MAP_PALETTE[name]
-    canvas = cv2.cvtColor(canvas, cv2.COLOR_RGB2BGR)
-
-    mmcv.mkdir_or_exist(os.path.dirname(fpath))
-    mmcv.imwrite(canvas, fpath)
-
-def visualize_map_carla(
-    fpath: str,
-    masks: np.ndarray,
-    *,
-    classes: List[str],
-    background: Tuple[int, int, int] = (240, 240, 240),
-) -> None:
-    assert masks.dtype == np.bool, masks.dtype
-
-    canvas = np.zeros((*masks.shape[-2:], 3), dtype=np.uint8)
-    canvas[:] = background
-
-    for k, name in enumerate(classes):
-        if name in CARLA_MAP_PALETTE:
-            canvas[masks[k], :] = CARLA_MAP_PALETTE[name]
-    
+        if name in PALETTE:
+            canvas[masks[k], :] = PALETTE[name]
     canvas = cv2.cvtColor(canvas, cv2.COLOR_RGB2BGR)
 
     mmcv.mkdir_or_exist(os.path.dirname(fpath))

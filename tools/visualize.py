@@ -13,7 +13,7 @@ from torchpack.utils.config import configs
 from tqdm import tqdm
 
 from mmdet3d.core import LiDARInstance3DBoxes
-from mmdet3d.core.utils import visualize_camera, visualize_lidar, visualize_map, visualize_map_carla
+from mmdet3d.core.utils import visualize_camera, visualize_lidar, visualize_map
 from mmdet3d.datasets import build_dataloader, build_dataset
 from mmdet3d.models import build_model
 
@@ -40,7 +40,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser()
     parser.add_argument("config", metavar="FILE")
-    parser.add_argument("--mode", type=str, default="gt", choices=["gt", "pred", "carla"])
+    parser.add_argument("--mode", type=str, default="gt", choices=["gt", "pred", "gt-simbev", "pred-simbev"])
     parser.add_argument("--checkpoint", type=str, default=None)
     parser.add_argument("--split", type=str, default="val", choices=["train", "val", "test"])
     parser.add_argument("--bbox-classes", nargs="+", type=int, default=None)
@@ -68,7 +68,7 @@ def main() -> None:
     )
 
     # build the model and load checkpoint
-    if args.mode == "pred" or args.mode == "carla":
+    if "pred" in args.mode:
         model = build_model(cfg.model)
         load_checkpoint(model, args.checkpoint, map_location="cpu")
 
@@ -82,18 +82,16 @@ def main() -> None:
     for data in tqdm(dataflow):
         metas = data["metas"].data[0][0]
 
-        # if args.mode == "carla":
-        #     name = "{}-SimBEV".format(metas["timestamp"])
-        # else:
-        #     name = "{}-{}".format(metas["timestamp"], metas["token"])
-
-        name = "{}-SimBEV".format(metas["timestamp"])
+        if "simbev" in args.mode:
+            name = "SimBEV-scene-{}-frame-{}".format(metas["scene"], metas["frame"])
+        else:
+            name = "{}-{}".format(metas["timestamp"], metas["token"])
         
-        if args.mode == "pred" or args.mode == "carla":
+        if args.mode == "pred" or args.mode == "pred-simbev":
             with torch.inference_mode():
                 outputs = model(**data)
 
-        if args.mode == "gt" and "gt_bboxes_3d" in data:
+        if "gt" in args.mode and "gt_bboxes_3d" in data:
             bboxes = data["gt_bboxes_3d"].data[0][0].tensor.numpy()
             labels = data["gt_labels_3d"].data[0][0].numpy()
 
@@ -104,7 +102,7 @@ def main() -> None:
 
             bboxes[..., 2] -= bboxes[..., 5] / 2
             bboxes = LiDARInstance3DBoxes(bboxes, box_dim=9)
-        elif args.mode == "pred" and "boxes_3d" in outputs[0]:
+        elif "pred" in args.mode and "boxes_3d" in outputs[0]:
             bboxes = outputs[0]["boxes_3d"].tensor.numpy()
             scores = outputs[0]["scores_3d"].numpy()
             labels = outputs[0]["labels_3d"].numpy()
@@ -133,59 +131,51 @@ def main() -> None:
         elif args.mode == "pred" and "masks_bev" in outputs[0]:
             masks = outputs[0]["masks_bev"].numpy()
             masks = masks >= args.map_score
-        elif args.mode == "carla" and "gt_masks_bev" in data and "masks_bev" in outputs[0]:
-            gt_masks = data["gt_masks_bev"].data[0].numpy()
-            gt_masks = np.rot90(gt_masks, 2, axes=(1, 2))
-            gt_masks = gt_masks.astype(np.bool)
-
-            pred_masks = outputs[0]["masks_bev"].numpy()
-            pred_masks = np.rot90(pred_masks, 2, axes=(1, 2))
-            pred_masks = pred_masks >= args.map_score
+        elif args.mode == "gt-simbev" and "gt_masks_bev" in data:
+            masks = data["gt_masks_bev"].data[0].numpy()
+            masks = np.rot90(masks, 2, axes=(1, 2))
+            masks = masks.astype(np.bool)
+        elif args.mode == "pred-simbev" and "masks_bev" in outputs[0]:
+            masks = outputs[0]["masks_bev"].numpy()
+            masks = np.rot90(masks, 2, axes=(1, 2))
         else:
             masks = None
 
-        if args.mode == "carla":
-            visualize_map_carla(
-                    os.path.join(args.out_dir, "gt", f"{name}.jpg"),
-                    gt_masks,
-                    classes=cfg.classes,
-                )
-            visualize_map_carla(
-                    os.path.join(args.out_dir, "pred", f"{name}.jpg"),
-                    pred_masks,
-                    classes=cfg.classes,
-                )
-        else:
-            if "img" in data:
-                for k, image_path in enumerate(metas["filename"]):
-                    image = mmcv.imread(image_path)
-                    visualize_camera(
-                        os.path.join(args.out_dir, f"camera-{k}", f"{name}.png"),
-                        image,
-                        bboxes=bboxes,
-                        labels=labels,
-                        transform=metas["lidar2image"][k],
-                        classes=cfg.object_classes,
-                    )
-
-            if "points" in data:
-                lidar = data["points"].data[0][0].numpy()
-                visualize_lidar(
-                    os.path.join(args.out_dir, "lidar", f"{name}.png"),
-                    lidar,
+        if "img" in data:
+            for k, image_path in enumerate(metas["filename"]):
+                image = mmcv.imread(image_path)
+                visualize_camera(
+                    os.path.join(args.out_dir, f"camera-{k}", f"{name}.png"),
+                    image,
                     bboxes=bboxes,
                     labels=labels,
-                    xlim=[cfg.point_cloud_range[d] for d in [0, 3]],
-                    ylim=[cfg.point_cloud_range[d] for d in [1, 4]],
+                    transform=metas["lidar2image"][k],
                     classes=cfg.object_classes,
+                    thickness = 2,
+                    mode = args.mode
                 )
 
-            if masks is not None:
-                visualize_map(
-                    os.path.join(args.out_dir, "map", f"{name}.png"),
-                    masks,
-                    classes=cfg.map_classes,
-                )
+        if "points" in data:
+            lidar = data["points"].data[0][0].numpy()
+            visualize_lidar(
+                os.path.join(args.out_dir, "lidar", f"{name}.png"),
+                lidar,
+                bboxes=bboxes,
+                labels=labels,
+                xlim=[cfg.point_cloud_range[d] for d in [0, 3]],
+                ylim=[cfg.point_cloud_range[d] for d in [1, 4]],
+                classes=cfg.object_classes,
+                thickness = 12,
+                mode = args.mode
+            )
+
+        if masks is not None:
+            visualize_map(
+                os.path.join(args.out_dir, "map", f"{name}.png"),
+                masks,
+                classes=cfg.map_classes,
+                mode = args.mode
+            )
 
 
 if __name__ == "__main__":

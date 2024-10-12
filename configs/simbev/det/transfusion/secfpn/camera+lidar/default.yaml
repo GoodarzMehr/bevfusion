@@ -59,4 +59,4 @@ lr_config: null
 optimizer:
   lr: 2.0e-4
 
-max_epochs: 6
+# max_epochs: 6
