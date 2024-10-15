@@ -66,7 +66,8 @@ class SimBEVDataset(Dataset):
         with_velocity=True,
         use_valid_flag=False,
         load_interval=4,
-        box_type_3d='LiDAR'
+        box_type_3d='LiDAR',
+        det_eval_mode='iou'
     ):
         super().__init__()
         self.dataset_root = dataset_root
@@ -82,6 +83,8 @@ class SimBEVDataset(Dataset):
 
         self.box_type_3d, self.box_mode_3d = get_box_type(box_type_3d)
 
+        self.eval_mode = det_eval_mode
+        
         self.epoch = -1
 
         # Get the list of object classes in the dataset.
@@ -550,7 +553,7 @@ class SimBEVDataset(Dataset):
 
         # Evaluate 3D object detection results.
         if 'boxes_3d' in results[0]:
-            simbev_eval = SimBEVDetectionEval(results, self.object_classes)
+            simbev_eval = SimBEVDetectionEval(results, self.object_classes, self.eval_mode)
 
             metrics.update(simbev_eval.evaluate())
         
@@ -595,24 +598,34 @@ class SimBEVDataset(Dataset):
 
 class SimBEVDetectionEval:
     '''
-    Class that evaluates 3D object detection results on the SimBEV dataset.
+    Class for evaluating 3D object detection results on the SimBEV dataset.
 
     Args:
         results: results from the model.
         classes: list of object classes in the dataset.
-        iou_thresholds: list of IoU thresholds for evaluation.
+        mode: evalution mode, can be 'iou' or 'distance'.
     '''
-    def __init__(self, results, classes, iou_thresholds=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]):
+    def __init__(self, results, classes, mode='iou'):
         self.results = results
         self.classes = classes
-        self.iou_thresholds = iou_thresholds
+        self.mode = mode
+
+        iou_thresholds = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+        distance_thresholds = [0.5, 1.0, 2.0, 4.0]
+
+        if self.mode == 'iou':
+            self.thresholds = iou_thresholds
+        elif self.mode == 'distance':
+            self.thresholds = distance_thresholds
+        else:
+            raise ValueError(f'Unsupported evaluation mode {self.mode}.')
 
     def evaluate(self):
         '''
         Evaluate 3D object detection results.
         '''
         num_classes = len(self.classes)
-        num_thresholds = len(self.iou_thresholds)
+        num_thresholds = len(self.thresholds)
 
         # Dictionary to store Average Precision (AP), Average Translation
         # Error (ATE), Average Orientation Error (AOE), Average Scale Error
@@ -624,8 +637,10 @@ class SimBEVDetectionEval:
 
         device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
 
-        for k, threshold in enumerate(self.iou_thresholds):
-            print(f'Calculating metrics for IoU threshold {threshold}...')
+        print('\n')
+        
+        for k, threshold in enumerate(self.thresholds):
+            print(f'Calculating metrics for threshold {threshold}...')
 
             # Dictionaries to store True Positive (TP) and False Positive (FP)
             # values, scores, ATE, AOE, ASE, AVE, and the total number of
@@ -650,17 +665,26 @@ class SimBEVDetectionEval:
                 gt_boxes_3d = result['gt_bboxes_3d']
                 gt_labels_3d = result['gt_labels_3d']
 
-                # Get 3D bounding box corners for the predictions.
-                if len(boxes_3d.tensor) > 0:
-                    boxes_3d_corners = boxes_3d.corners
-                else:
-                    boxes_3d_corners = torch.empty((0, 8, 3))
+                if self.mode == 'iou':
+                    if len(boxes_3d.tensor) > 0:
+                        boxes_3d_corners = boxes_3d.corners
+                    else:
+                        boxes_3d_corners = torch.empty((0, 8, 3))
 
-                # Get 3D bounding box corners for the ground truth.
-                if len(gt_boxes_3d.tensor) > 0:
-                    gt_boxes_3d_corners = gt_boxes_3d.corners
+                    if len(gt_boxes_3d.tensor) > 0:
+                        gt_boxes_3d_corners = gt_boxes_3d.corners
+                    else:
+                        gt_boxes_3d_corners = torch.empty((0, 8, 3))
                 else:
-                    gt_boxes_3d_corners = torch.empty((0, 8, 3))
+                    if len(boxes_3d.tensor) > 0:
+                        boxes_3d_centers = boxes_3d.gravity_center
+                    else:
+                        boxes_3d_centers = torch.empty((0, 1, 3))
+
+                    if len(gt_boxes_3d.tensor) > 0:
+                        gt_boxes_3d_centers = gt_boxes_3d.gravity_center
+                    else:
+                        gt_boxes_3d_centers = torch.empty((0, 1, 3))
 
                 for cls in range(num_classes):
                     pred_mask = labels_3d == cls
@@ -668,72 +692,121 @@ class SimBEVDetectionEval:
                     gt_mask = gt_labels_3d == cls
 
                     pred_boxes = boxes_3d[pred_mask]
-                    pred_box_corners = boxes_3d_corners[pred_mask]
+                    
+                    if self.mode == 'iou':
+                        pred_box_corners = boxes_3d_corners[pred_mask]
+                    else:
+                        pred_box_centers = boxes_3d_centers[pred_mask]
                     
                     pred_scores = scores_3d[pred_mask]
                     
                     gt_boxes = gt_boxes_3d[gt_mask]
-                    gt_box_corners = gt_boxes_3d_corners[gt_mask]
+
+                    if self.mode == 'iou':
+                        gt_box_corners = gt_boxes_3d_corners[gt_mask]
+                    else:
+                        gt_box_centers = gt_boxes_3d_centers[gt_mask]
 
                     # Sort predictions by confidence score in descending
                     # order.
                     sorted_indices = torch.argsort(-pred_scores)
 
                     pred_boxes = pred_boxes[sorted_indices]
-                    pred_box_corners = pred_box_corners[sorted_indices]
+
+                    if self.mode == 'iou':
+                        pred_box_corners = pred_box_corners[sorted_indices]
+                    else:
+                        pred_box_centers = pred_box_centers[sorted_indices]
                     
                     pred_scores = pred_scores[sorted_indices]
 
-                    pred_box_corners = pred_box_corners.to(device)
-                    gt_box_corners = gt_box_corners.to(device)
-                    
-                    # Calculate Intersection over Union (IoU) between
-                    # predicted and ground truth bounding boxes.
-                    if len(pred_box_corners) == 0:
-                        ious = torch.zeros((0, len(gt_box_corners))).to(device)
-                    elif len(gt_box_corners) == 0:
-                        ious = torch.zeros((len(pred_box_corners), 0)).to(device)
+                    if self.mode == 'iou':
+                        pred_box_corners = pred_box_corners.to(device)
+                        gt_box_corners = gt_box_corners.to(device)
                     else:
-                        _, ious = box3d_overlap(pred_box_corners, gt_box_corners)
+                        pred_box_centers = pred_box_centers.to(device)
+                        gt_box_centers = gt_box_centers.to(device)
+                    
+                    if self.mode == 'iou':
+                        # Calculate Intersection over Union (IoU) between
+                        # predicted and ground truth bounding boxes.
+                        if len(pred_box_corners) == 0:
+                            ious = torch.zeros((0, len(gt_box_corners))).to(device)
+                        elif len(gt_box_corners) == 0:
+                            ious = torch.zeros((len(pred_box_corners), 0)).to(device)
+                        else:
+                            _, ious = box3d_overlap(pred_box_corners, gt_box_corners)
+                    else:
+                        # Calculate Euclidean distance between predicted and
+                        # ground truth bounding box centers.
+                        dists = torch.cdist(pred_box_centers, gt_box_centers)
 
                     # Tensor to keep track of ground truth boxes that have
                     # been assigned to a prediction.
-                    assigned_gt = torch.zeros(len(gt_box_corners), dtype=torch.bool).to(device)
+                    if self.mode == 'iou':
+                        assigned_gt = torch.zeros(len(gt_box_corners), dtype=torch.bool).to(device)
 
-                    tp = torch.zeros(len(pred_box_corners))
-                    fp = torch.zeros(len(pred_box_corners))
+                        tp = torch.zeros(len(pred_box_corners))
+                        fp = torch.zeros(len(pred_box_corners))
+                    else:
+                        assigned_gt = torch.zeros(len(gt_box_centers), dtype=torch.bool).to(device)
+
+                        tp = torch.zeros(len(pred_box_centers))
+                        fp = torch.zeros(len(pred_box_centers))                    
 
                     ate_local = []
                     aoe_local = []
                     ase_local = []
                     ave_local = []
 
-                    for i, pred_box in enumerate(pred_box_corners):                        
-                        # Among the ground truth bounding boxes that have not
-                        # been matched to a prediction yet, find the one with
-                        # the highest IoU value.
-                        available_ious = ious[i] * ~assigned_gt
-
-                        if available_ious.shape[0] > 0:
-                            iou_max, max_gt_idx = available_ious.max(dim=0)
-                            max_gt_idx = max_gt_idx.item()
-                        else:
-                            iou_max = 0
-                            max_gt_idx = -1
+                    for i, pred_box in enumerate(pred_boxes):                        
+                        matched = False
+                        matched_gt_idx = -1
                         
-                        # If the IoU value is above the threshold, match the
-                        # ground truth bounding box to the prediction.
-                        if iou_max >= threshold:
+                        if self.mode == 'iou':
+                            # Among the ground truth bounding boxes that have not
+                            # been matched to a prediction yet, find the one with
+                            # the highest IoU value.
+                            available_ious = ious[i] * ~assigned_gt
+
+                            if available_ious.shape[0] > 0:
+                                iou_max, max_gt_idx = available_ious.max(dim=0)
+                                max_gt_idx = max_gt_idx.item()
+                            else:
+                                iou_max = 0
+                                max_gt_idx = -1
+
+                            if iou_max >= threshold:
+                                matched = True
+                                matched_gt_idx = max_gt_idx
+                        else:
+                            # Among the ground truth bounding boxes that have not
+                            # been matched to a prediction yet, find the one with
+                            # the smallest Euclidean distance.
+                            available_dists = 10000 - ((10000 - dists[i]) * ~assigned_gt)    
+
+                            if available_dists.shape[0] > 0:
+                                dist_min, min_gt_idx = available_dists.min(dim=0)
+                                min_gt_idx = min_gt_idx.item()
+                            else:
+                                dist_min = 10000
+                                min_gt_idx = -1
+                            
+                            if dist_min <= threshold:
+                                matched = True
+                                matched_gt_idx = min_gt_idx
+                        
+                        if matched:
                             tp[i] = 1
 
-                            assigned_gt[max_gt_idx] = True
+                            assigned_gt[matched_gt_idx] = True
 
                             # Calculate ATE, which is the Euclidean distance
                             # between the predicted and ground truth bounding
                             # box centers.
                             ate_local.append(
                                 torch.linalg.vector_norm(
-                                    pred_boxes[i].tensor[0, :3] - gt_boxes[max_gt_idx].tensor[0, :3]
+                                    pred_boxes[i].tensor[0, :3] - gt_boxes[matched_gt_idx].tensor[0, :3]
                                 )
                             )
 
@@ -741,7 +814,7 @@ class SimBEVDetectionEval:
                             # between the predicted and ground truth bounding
                             # boxes.
                             diff_angle = (
-                                gt_boxes[max_gt_idx].tensor[0, 6] - pred_boxes[i].tensor[0, 6] + np.pi
+                                gt_boxes[matched_gt_idx].tensor[0, 6] - pred_boxes[i].tensor[0, 6] + np.pi
                             ) % (2 * np.pi) - np.pi
 
                             # Ensure the angle difference is between -pi and
@@ -756,7 +829,7 @@ class SimBEVDetectionEval:
                             # are translated and rotated to have the same
                             # center and orientation.
                             pred_wlh = pred_boxes[i].tensor[0, 3:6]
-                            gt_wlh = gt_boxes[max_gt_idx].tensor[0, 3:6]
+                            gt_wlh = gt_boxes[matched_gt_idx].tensor[0, 3:6]
 
                             min_wlh = torch.minimum(pred_wlh, gt_wlh)
 
@@ -774,7 +847,7 @@ class SimBEVDetectionEval:
                             # truth bounding box velocities.
                             ave_local.append(
                                 torch.linalg.vector_norm(
-                                    pred_boxes[i].tensor[0, -2:] - gt_boxes[max_gt_idx].tensor[0, -2:]
+                                    pred_boxes[i].tensor[0, -2:] - gt_boxes[matched_gt_idx].tensor[0, -2:]
                                 )
                             )
                         else:
@@ -790,7 +863,10 @@ class SimBEVDetectionEval:
                     ase[cls] = torch.cat((ase[cls], torch.Tensor(ase_local)))
                     ave[cls] = torch.cat((ave[cls], torch.Tensor(ave_local)))
 
-                    num_gt_boxes[cls] += len(gt_box_corners)
+                    if self.mode == 'iou':
+                        num_gt_boxes[cls] += len(gt_box_corners)
+                    else:
+                        num_gt_boxes[cls] += len(gt_box_centers)
 
             for cls in range(num_classes):
                 # Sort TP and FP values by confidence score in descending
@@ -823,17 +899,25 @@ class SimBEVDetectionEval:
         for item in ['AP', 'ATE', 'AOE', 'ASE', 'AVE']:
             for index, name in enumerate(self.classes):
                 metrics[f'det/{name}/{item}@max'] = det_metrics[item][index].max().item()
+                metrics[f'det/{name}/{item}@mean'] = det_metrics[item][index].nanmean().item()
 
-                for threshold, value in zip(self.iou_thresholds, det_metrics[item][index]):
+                for threshold, value in zip(self.thresholds, det_metrics[item][index]):
                     metrics[f'det/{name}/{item}@{threshold:.2f}'] = value.item()
         
-            for index, threshold in enumerate(self.iou_thresholds):
+            for index, threshold in enumerate(self.thresholds):
                 metrics[f'det/mean/{item}@{threshold:.2f}'] = det_metrics[item][:, index].nanmean().item()
             
-            print(f'{item:<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
+            if self.mode == 'iou':
+                print(f'{item:<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8} {"mean":<8}')
+            else:
+                print(f'{item:<12} {0.5:<8}{1.0:<8}{2.0:<8}{4.0:<8} {"mean":<8}')
 
             for index, name in enumerate(self.classes):
-                print(f'{name:<12}', ''.join([f'{value:<8.4f}' for value in det_metrics[item][index].tolist()]))
+                print(
+                    f'{name:<12}',
+                    ''.join([f'{value:<8.4f}' for value in det_metrics[item][index].tolist()]),
+                    f'{det_metrics[item][index].nanmean().item():<8.4f}'
+                )
             
             print(
                 f'm{item:<11}',
@@ -841,7 +925,10 @@ class SimBEVDetectionEval:
                 '\n'
             )
 
-            mean_metrics[f'm{item}'] = det_metrics[item][:, 2:].nanmean().item()
+            if self.mode == 'iou':
+                mean_metrics[f'm{item}'] = det_metrics[item][:, 2:].nanmean().item()
+            else:
+                mean_metrics[f'm{item}'] = det_metrics[item].nanmean().item()
 
             metrics[f'det/m{item}'] = mean_metrics[f'm{item}']
 
