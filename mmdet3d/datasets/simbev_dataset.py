@@ -51,6 +51,8 @@ class SimBEVDataset(Dataset):
         box_type_3d: type of 3D box used in the dataset, indicating the
             coordinate system of the 3D box. Can be 'LiDAR', 'Depth', or
             'Camera'.
+        det_eval_mode: evaluation mode for 3D object detection results, can be
+            'iou' or 'distance'.
     '''
 
     def __init__(
@@ -676,15 +678,9 @@ class SimBEVDetectionEval:
                     else:
                         gt_boxes_3d_corners = torch.empty((0, 8, 3))
                 else:
-                    if len(boxes_3d.tensor) > 0:
-                        boxes_3d_centers = boxes_3d.gravity_center
-                    else:
-                        boxes_3d_centers = torch.empty((0, 1, 3))
+                    boxes_3d_centers = boxes_3d.gravity_center
 
-                    if len(gt_boxes_3d.tensor) > 0:
-                        gt_boxes_3d_centers = gt_boxes_3d.gravity_center
-                    else:
-                        gt_boxes_3d_centers = torch.empty((0, 1, 3))
+                    gt_boxes_3d_centers = gt_boxes_3d.gravity_center
 
                 for cls in range(num_classes):
                     pred_mask = labels_3d == cls
@@ -743,16 +739,10 @@ class SimBEVDetectionEval:
 
                     # Tensor to keep track of ground truth boxes that have
                     # been assigned to a prediction.
-                    if self.mode == 'iou':
-                        assigned_gt = torch.zeros(len(gt_box_corners), dtype=torch.bool).to(device)
+                    assigned_gt = torch.zeros(len(gt_boxes), dtype=torch.bool).to(device)
 
-                        tp = torch.zeros(len(pred_box_corners))
-                        fp = torch.zeros(len(pred_box_corners))
-                    else:
-                        assigned_gt = torch.zeros(len(gt_box_centers), dtype=torch.bool).to(device)
-
-                        tp = torch.zeros(len(pred_box_centers))
-                        fp = torch.zeros(len(pred_box_centers))                    
+                    tp = torch.zeros(len(pred_boxes))
+                    fp = torch.zeros(len(pred_boxes))                  
 
                     ate_local = []
                     aoe_local = []
@@ -863,10 +853,7 @@ class SimBEVDetectionEval:
                     ase[cls] = torch.cat((ase[cls], torch.Tensor(ase_local)))
                     ave[cls] = torch.cat((ave[cls], torch.Tensor(ave_local)))
 
-                    if self.mode == 'iou':
-                        num_gt_boxes[cls] += len(gt_box_corners)
-                    else:
-                        num_gt_boxes[cls] += len(gt_box_centers)
+                    num_gt_boxes[cls] += len(gt_boxes)
 
             for cls in range(num_classes):
                 # Sort TP and FP values by confidence score in descending
@@ -895,6 +882,8 @@ class SimBEVDetectionEval:
         metrics = {}
 
         mean_metrics = {}
+
+        print('\n')
 
         for item in ['AP', 'ATE', 'AOE', 'ASE', 'AVE']:
             for index, name in enumerate(self.classes):
