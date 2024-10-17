@@ -87,7 +87,7 @@ def main() -> None:
         else:
             name = "{}-{}".format(metas["timestamp"], metas["token"])
         
-        if args.mode == "pred" or args.mode == "pred-simbev":
+        if "pred" in args.mode:
             with torch.inference_mode():
                 outputs = model(**data)
 
@@ -138,36 +138,38 @@ def main() -> None:
         elif args.mode == "pred-simbev" and "masks_bev" in outputs[0]:
             masks = outputs[0]["masks_bev"].numpy()
             masks = np.rot90(masks, 2, axes=(1, 2))
+            masks = masks >= args.map_score
         else:
             masks = None
 
-        if "img" in data:
-            for k, image_path in enumerate(metas["filename"]):
-                image = mmcv.imread(image_path)
-                visualize_camera(
-                    os.path.join(args.out_dir, f"camera-{k}", f"{name}.png"),
-                    image,
+        if bboxes is not None:
+            if "img" in data:
+                for k, image_path in enumerate(metas["filename"]):
+                    image = mmcv.imread(image_path)
+                    visualize_camera(
+                        os.path.join(args.out_dir, f"camera-{k}", f"{name}.png"),
+                        image,
+                        bboxes=bboxes,
+                        labels=labels,
+                        transform=metas["lidar2image"][k],
+                        classes=cfg.object_classes,
+                        thickness = 2,
+                        mode = args.mode
+                    )
+
+            if "points" in data:
+                lidar = data["points"].data[0][0].numpy()
+                visualize_lidar(
+                    os.path.join(args.out_dir, "lidar", f"{name}.png"),
+                    lidar,
                     bboxes=bboxes,
                     labels=labels,
-                    transform=metas["lidar2image"][k],
+                    xlim=[cfg.point_cloud_range[d] for d in [0, 3]],
+                    ylim=[cfg.point_cloud_range[d] for d in [1, 4]],
                     classes=cfg.object_classes,
-                    thickness = 2,
+                    thickness = 12,
                     mode = args.mode
                 )
-
-        if "points" in data:
-            lidar = data["points"].data[0][0].numpy()
-            visualize_lidar(
-                os.path.join(args.out_dir, "lidar", f"{name}.png"),
-                lidar,
-                bboxes=bboxes,
-                labels=labels,
-                xlim=[cfg.point_cloud_range[d] for d in [0, 3]],
-                ylim=[cfg.point_cloud_range[d] for d in [1, 4]],
-                classes=cfg.object_classes,
-                thickness = 12,
-                mode = args.mode
-            )
 
         if masks is not None:
             visualize_map(

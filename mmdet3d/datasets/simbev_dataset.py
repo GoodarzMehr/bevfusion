@@ -489,18 +489,20 @@ class SimBEVDataset(Dataset):
         Returns:
             metrics: evaluation metrics for BEV map segmentation results.
         '''
-        thresholds = torch.tensor([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9])
+        device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
+
+        thresholds = torch.tensor([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]).to(device)
 
         num_classes = len(self.map_classes)
         num_thresholds = len(thresholds)
 
-        tp = torch.zeros(num_classes, num_thresholds)
-        fp = torch.zeros(num_classes, num_thresholds)
-        fn = torch.zeros(num_classes, num_thresholds)
+        tp = torch.zeros(num_classes, num_thresholds).to(device)
+        fp = torch.zeros(num_classes, num_thresholds).to(device)
+        fn = torch.zeros(num_classes, num_thresholds).to(device)
 
         for result in results:
-            pred = result['masks_bev']
-            label = result['gt_masks_bev']
+            pred = result['masks_bev'].to(device)
+            label = result['gt_masks_bev'].to(device)
 
             pred = pred.detach().reshape(num_classes, -1)
             label = label.detach().bool().reshape(num_classes, -1)
@@ -513,7 +515,7 @@ class SimBEVDataset(Dataset):
             fn += (~pred & label).sum(dim=1)
 
         ious = tp / (tp + fp + fn + 1e-6)
-
+        
         metrics = {}
         
         for index, name in enumerate(self.map_classes):
