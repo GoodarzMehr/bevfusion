@@ -316,6 +316,7 @@ class LoadSimBEVBEVSegmentation:
     Load SimBEV BEV segmentation masks.
 
     Args:
+        is_train: whether the data is for training.
         bev_res_x: BEV grid cell length along the x axis.
         bev_dim_x: BEV grid dimension along the x axis.
         bev_res_y: BEV grid cell length along the y axis.
@@ -323,7 +324,9 @@ class LoadSimBEVBEVSegmentation:
         dType: data type to use for calculations.
     '''
 
-    def __init__(self, bev_res_x, bev_dim_x, bev_res_y=None, bev_dim_y=None, dType=torch.float):
+    def __init__(self, is_train, bev_res_x, bev_dim_x, bev_res_y=None, bev_dim_y=None, dType=torch.float):
+        self.is_train = is_train
+        
         if bev_res_y is None:
             bev_res_y = bev_res_x
         
@@ -351,58 +354,93 @@ class LoadSimBEVBEVSegmentation:
         
         gt_masks = np.rot90(gt_masks, 2, axes=(2, 1)).copy()
 
-        gt_masks = torch.from_numpy(gt_masks).to(self.dType)
-        
-        # Calculate transformation matrix.
-        lidar2point = data['lidar_aug_matrix']
+        # car_mask = gt_masks[1]
+        # truck_mask = np.logical_or(gt_masks[2], gt_masks[3])
+        # cyclist_mask = np.logical_or.reduce((gt_masks[4], gt_masks[5], gt_masks[6]))
+        # pedestrian_mask = gt_masks[7]
 
-        lidar2point[:3, :3] = lidar2point[:3, :3].T
+        # road_mask = np.logical_and(
+        #     gt_masks[0],
+        #     np.logical_not(np.logical_or.reduce((car_mask, truck_mask, cyclist_mask, pedestrian_mask)))
+        # )
 
-        point2lidar = np.linalg.inv(lidar2point)
+        # gt_masks = np.array([road_mask, car_mask, truck_mask, cyclist_mask, pedestrian_mask])
 
-        lidar2ego = data['lidar2ego']
+        if self.is_train:
+            gt_masks = torch.from_numpy(gt_masks).to(self.dType)
+            
+            # Calculate transformation matrix.
+            lidar2point = data['lidar_aug_matrix']
 
-        point2ego = lidar2ego @ point2lidar
+            lidar2point[:3, :3] = lidar2point[:3, :3].T
 
-        R = torch.tensor(point2ego[[0, 1, 3], :][:, [0, 1, 3]], dtype=self.dType)
+            point2lidar = np.linalg.inv(lidar2point)
 
-        xDim = gt_masks.shape[-2]
-        yDim = gt_masks.shape[-1]
+            lidar2ego = data['lidar2ego']
 
-        xLim = xDim * self.xRes / 2
-        yLim = yDim * self.yRes / 2
+            point2ego = lidar2ego @ point2lidar
 
-        R[:2, 2] /= torch.Tensor([xLim, yLim]).to(self.dType)
+            R = torch.tensor(point2ego[[0, 1, 3], :][:, [0, 1, 3]], dtype=self.dType)
 
-        R[:2, 2] = R[:2, 2].flip(dims=(0,))
+            xDim = gt_masks.shape[-2]
+            yDim = gt_masks.shape[-1]
 
-        angle = torch.atan2(R[1, 0], R[0, 0])
+            xLim = xDim * self.xRes / 2
+            yLim = yDim * self.yRes / 2
 
-        R[:2, 2] = torch.Tensor(
-            [[torch.cos(angle), -torch.sin(angle) * (xLim / yLim)],
-            [torch.sin(angle) * (yLim / xLim), torch.cos(angle)]]
-        ).to(self.dType) @ R[:2, 2]
+            R[:2, 2] /= torch.Tensor([xLim, yLim]).to(self.dType)
 
-        R[:2, :2] *= torch.Tensor([[1, (xLim / yLim)], [(yLim / xLim), 1]]).to(self.dType)
+            R[:2, 2] = R[:2, 2].flip(dims=(0,))
 
-        theta = torch.unsqueeze(R[:2, :], 0)
+            angle = torch.atan2(R[1, 0], R[0, 0])
 
-        unsqueezed_gt_masks = torch.unsqueeze(gt_masks, 0)
+            R[:2, 2] = torch.Tensor(
+                [[torch.cos(angle), -torch.sin(angle) * (xLim / yLim)],
+                [torch.sin(angle) * (yLim / xLim), torch.cos(angle)]]
+            ).to(self.dType) @ R[:2, 2]
 
-        grid = F.affine_grid(theta, unsqueezed_gt_masks.size(), align_corners=False)
+            R[:2, :2] *= torch.Tensor([[1, (xLim / yLim)], [(yLim / xLim), 1]]).to(self.dType)
 
-        new_gt_mask = F.grid_sample(
-            unsqueezed_gt_masks,
-            grid,
-            mode='nearest',
-            align_corners=False
-        ).squeeze(0).to(torch.bool)
+            theta = torch.unsqueeze(R[:2, :], 0)
 
-        data['gt_masks_bev'] = new_gt_mask[
-            :,
-            ((xDim - self.DxDim) // 2):((xDim + self.DxDim) // 2),
-            ((yDim - self.DyDim) // 2):((yDim + self.DyDim) // 2)
-        ].detach().clone().cpu().numpy()
+            unsqueezed_gt_masks = torch.unsqueeze(gt_masks, 0)
+
+            grid = F.affine_grid(theta, unsqueezed_gt_masks.size(), align_corners=False)
+
+            new_gt_mask_nearest = F.grid_sample(
+                unsqueezed_gt_masks,
+                grid,
+                mode='nearest',
+                align_corners=False
+            ).squeeze(0).to(torch.bool)
+            
+            new_gt_mask_bilinear = F.grid_sample(
+                unsqueezed_gt_masks,
+                grid,
+                mode='bilinear',
+                align_corners=False
+            ).squeeze(0)
+
+            new_gt_mask = new_gt_mask_nearest.detach().clone().cpu().numpy()
+            new_gt_mask[4:] = np.logical_or(
+                new_gt_mask[4:],
+                new_gt_mask_bilinear[4:].detach().clone().cpu().numpy() > 0.25
+            )
+
+            data['gt_masks_bev'] = new_gt_mask[
+                :,
+                ((xDim - self.DxDim) // 2):((xDim + self.DxDim) // 2),
+                ((yDim - self.DyDim) // 2):((yDim + self.DyDim) // 2)
+            ]
+        else:
+            xDim = gt_masks.shape[-2]
+            yDim = gt_masks.shape[-1]
+
+            data['gt_masks_bev'] = gt_masks[
+                :,
+                ((xDim - self.DxDim) // 2):((xDim + self.DxDim) // 2),
+                ((yDim - self.DyDim) // 2):((yDim + self.DyDim) // 2)
+            ]
 
         return data
 

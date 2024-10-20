@@ -74,6 +74,7 @@ train_pipeline:
     is_train: true
   -
     type: LoadSimBEVBEVSegmentation
+    is_train: true
     bev_res_x: 0.4
     bev_dim_x: 256
   -
@@ -153,6 +154,7 @@ test_pipeline:
     is_train: false
   -
     type: LoadSimBEVBEVSegmentation
+    is_train: false
     bev_res_x: 0.4
     bev_dim_x: 256
   -
