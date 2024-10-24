@@ -61,7 +61,7 @@ model:
 
 optimizer:
   type: AdamW
-  lr: 1.0e-4
+  lr: 3.0e-5
 
 optimizer_config:
   grad_clip:
@@ -70,6 +70,7 @@ optimizer_config:
 
 lr_config:
   policy: cyclic
+  target_ratio: 4.0
 
 momentum_config:
   policy: cyclic
