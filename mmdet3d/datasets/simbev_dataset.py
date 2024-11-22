@@ -530,6 +530,8 @@ class SimBEVDataset(Dataset):
             metrics[f'map/mean/IoU@{threshold.item():.2f}'] = ious[:, index].mean().item()
         
         # Print IoU table.
+        print('\n\n')
+
         print(f'{"IoU":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
 
         for index, name in enumerate(self.map_classes):
