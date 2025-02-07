@@ -569,21 +569,23 @@ class LoadPointsFromFile:
 @PIPELINES.register_module()
 class LoadSimBEVPointsFromFile:
     '''
-    Load lidar point cloud from compressed NumPy file.
+    Load lidar point cloud from NumPy file.
 
     Args:
         - coord_type: coordinate type of the data.
+        - trim_step: channel step size for trimming the point cloud.
     '''
 
-    def __init__(self, coord_type):
+    def __init__(self, coord_type, trim_step):
         self.coord_type = coord_type
+        self.trim_step = trim_step
 
     def _load_points(self, lidar_path):
         '''
         Load point cloud data from file.
 
         Args:
-            lidar_path: path to the compressed point cloud file.
+            lidar_path: path to the point cloud file.
 
         Returns:
             points: array of point cloud data.
@@ -597,6 +599,44 @@ class LoadSimBEVPointsFromFile:
 
         return points
 
+    def _trim_points(self, points, trim_step):
+        '''
+        Trim point cloud data based on the provided trim step.
+
+        Args:
+            points: array of point cloud data.
+            trim_step: channel step size for trimming the point cloud.
+
+        Returns:
+            points: trimmed array of point cloud data.
+        '''
+        angles = np.arctan(points[:, 2] / np.linalg.norm(points[:, :2], axis=1))
+        angles = np.trunc(angles * 1000.0) / 1000.0
+
+        unique_angles = np.sort(np.unique(angles))
+
+        channels = []
+        extras = []
+
+        for angle in unique_angles:
+            if len(channels) == 0:
+                channels.append(angle)
+            elif abs(np.array(channels) - angle).min() < 0.0015:
+                extras.append(angle)
+            else:
+                channels.append(angle)
+        
+        for extra in extras:
+            angles[angles == extra] = channels[np.abs(np.array(channels) - extra).argmin()]
+        
+        lidar_angles = np.sort(np.array(channels))[::trim_step]
+
+        mask = np.isin(angles, lidar_angles)
+
+        trimmed_points = points[mask]
+
+        return trimmed_points
+    
     def __call__(self, results):
         '''
         Load point cloud data from file.
@@ -610,6 +650,8 @@ class LoadSimBEVPointsFromFile:
         lidar_path = results['lidar_path']
         
         points = self._load_points(lidar_path)
+
+        points = self._trim_points(points, self.trim_step)
         
         points_class = get_points_type(self.coord_type)
         

@@ -1,9 +1,9 @@
 dataset_type: NuScenesDataset
-dataset_root: /data/nuscenes/
+dataset_root: /dataset/nuscenes/
 gt_paste_stop_epoch: -1
 reduce_beams: 32
 load_dim: 5
-use_dim: 5
+use_dim: 3
 load_augmented: null
 
 point_cloud_range: [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
@@ -23,16 +23,12 @@ augment3d:
   translate: 0.5
 
 object_classes:
+  - pedestrian
   - car
   - truck
-  - construction_vehicle
   - bus
-  - trailer
-  - barrier
   - motorcycle
   - bicycle
-  - pedestrian
-  - traffic_cone
 
 map_classes:
   - drivable_area
@@ -65,7 +61,7 @@ train_pipeline:
     load_augmented: ${load_augmented}
   -
     type: LoadPointsFromMultiSweeps
-    sweeps_num: 9
+    sweeps_num: 0
     load_dim: ${load_dim}
     use_dim: ${use_dim}
     reduce_beams: ${reduce_beams}
@@ -192,12 +188,12 @@ test_pipeline:
     type: LoadPointsFromFile
     coord_type: LIDAR
     load_dim: ${load_dim}
-    use_dim: ${use_dim}
+    use_dim: ${load_dim}
     reduce_beams: ${reduce_beams}
     load_augmented: ${load_augmented}
   -
     type: LoadPointsFromMultiSweeps
-    sweeps_num: 9
+    sweeps_num: 0
     load_dim: ${load_dim}
     use_dim: ${use_dim}
     reduce_beams: ${reduce_beams}

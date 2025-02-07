@@ -53,6 +53,7 @@ train_pipeline:
   -
     type: LoadSimBEVPointsFromFile
     coord_type: LIDAR
+    trim_step: 4
   -
     type: LoadAnnotations3D
     with_bbox_3d: true
@@ -133,6 +134,7 @@ test_pipeline:
   -
     type: LoadSimBEVPointsFromFile
     coord_type: LIDAR
+    trim_step: 4
   -
     type: LoadAnnotations3D
     with_bbox_3d: true
@@ -243,6 +245,7 @@ data:
       test_mode: false
       use_valid_flag: true
       box_type_3d: LiDAR
+      det_eval_mode: distance
   val:
     type: ${dataset_type}
     dataset_root: ${dataset_root}
@@ -253,6 +256,7 @@ data:
     modality: ${input_modality}
     test_mode: false
     box_type_3d: LiDAR
+    det_eval_mode: distance
   test:
     type: ${dataset_type}
     dataset_root: ${dataset_root}
@@ -263,7 +267,7 @@ data:
     modality: ${input_modality}
     test_mode: true
     box_type_3d: LiDAR
-    det_eval_mode: iou
+    det_eval_mode: distance
 
 evaluation:
   interval: 1
