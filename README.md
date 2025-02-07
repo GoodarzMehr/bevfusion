@@ -1,8 +1,10 @@
 # BEVFusion in CARLA
 
+<!---
 ![demo](assets/carla-demo.gif)
 
 <p align="center"> <b>Left</b>: BEVFusion predictions <b>Right</b>: ground truth </p>
+-->
 
 ## About
 
