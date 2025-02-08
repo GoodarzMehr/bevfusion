@@ -83,7 +83,7 @@ def main() -> None:
         metas = data["metas"].data[0][0]
 
         if "simbev" in args.mode:
-            name = "SimBEV-scene-{}-frame-{}".format(metas["scene"], metas["frame"])
+            name = f'SimBEV-scene-{metas["scene"]:04d}-frame-{metas["frame"]:04d}'
         else:
             name = "{}-{}".format(metas["timestamp"], metas["token"])
         

@@ -53,7 +53,7 @@ train_pipeline:
   -
     type: LoadSimBEVPointsFromFile
     coord_type: LIDAR
-    trim_step: 4
+    trim_step: 1
   -
     type: LoadAnnotations3D
     with_bbox_3d: true
@@ -134,7 +134,7 @@ test_pipeline:
   -
     type: LoadSimBEVPointsFromFile
     coord_type: LIDAR
-    trim_step: 4
+    trim_step: 1
   -
     type: LoadAnnotations3D
     with_bbox_3d: true
