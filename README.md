@@ -1,14 +1,6 @@
 # BEVFusion in CARLA
 
-<!--
-![demo](assets/carla-demo.gif)
-
-<p align="center"> <b>Left</b>: BEVFusion predictions <b>Right</b>: ground truth </p>
--->
-
-
-https://github.com/user-attachments/assets/a0760123-8e98-4c3f-b1ca-fe99e712c395
-
+![demo](assets/BEVFusion.gif)
 
 ## About
 
