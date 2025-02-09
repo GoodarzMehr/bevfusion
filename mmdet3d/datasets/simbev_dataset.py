@@ -67,7 +67,7 @@ class SimBEVDataset(Dataset):
         filter_empty_gt=True,
         with_velocity=True,
         use_valid_flag=False,
-        load_interval=4,
+        load_interval=20,
         box_type_3d='LiDAR',
         det_eval_mode='iou'
     ):

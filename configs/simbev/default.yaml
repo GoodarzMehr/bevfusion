@@ -260,7 +260,7 @@ data:
   test:
     type: ${dataset_type}
     dataset_root: ${dataset_root}
-    ann_file: ${dataset_root + "infos/simbev_infos_test.json"}
+    ann_file: ${dataset_root + "infos/simbev_infos_val.json"}
     object_classes: ${object_classes}
     map_classes: ${map_classes}
     pipeline: ${test_pipeline}

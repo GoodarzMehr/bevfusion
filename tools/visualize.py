@@ -40,7 +40,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser()
     parser.add_argument("config", metavar="FILE")
-    parser.add_argument("--mode", type=str, default="gt", choices=["gt", "pred", "gt-simbev", "pred-simbev"])
+    parser.add_argument("--mode", type=str, default="gt-simbev", choices=["gt", "pred", "gt-simbev", "pred-simbev"])
     parser.add_argument("--checkpoint", type=str, default=None)
     parser.add_argument("--split", type=str, default="val", choices=["train", "val", "test"])
     parser.add_argument("--bbox-classes", nargs="+", type=int, default=None)
