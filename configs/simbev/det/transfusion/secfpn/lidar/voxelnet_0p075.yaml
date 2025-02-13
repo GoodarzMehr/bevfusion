@@ -11,7 +11,7 @@ model:
         max_voxels: [120000, 160000]
       backbone:
         type: SparseEncoder
-        in_channels: 3
+        in_channels: 4
         sparse_shape: [1440, 1440, 41]
         output_channels: 128
         order:

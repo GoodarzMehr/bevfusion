@@ -1,6 +1,10 @@
 dataset_type: SimBEVDataset
 dataset_root: /dataset/simbev/
 
+num_sweeps: 9
+time_step: 0.05
+trim_step: 1
+
 point_cloud_range: [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
 voxel_size: [0.1, 0.1, 0.2]
 image_size: [256, 704]
@@ -53,7 +57,13 @@ train_pipeline:
   -
     type: LoadSimBEVPointsFromFile
     coord_type: LIDAR
-    trim_step: 1
+    trim_step: ${trim_step}
+  -
+    type: LoadSimBEVPointsFromMultiSweeps
+    num_sweeps: ${num_sweeps}
+    time_step: ${time_step}
+    trim_step: ${trim_step}
+    is_train: true
   -
     type: LoadAnnotations3D
     with_bbox_3d: true
@@ -134,7 +144,13 @@ test_pipeline:
   -
     type: LoadSimBEVPointsFromFile
     coord_type: LIDAR
-    trim_step: 1
+    trim_step: ${trim_step}
+  -
+    type: LoadSimBEVPointsFromMultiSweeps
+    num_sweeps: ${num_sweeps}
+    time_step: ${time_step}
+    trim_step: ${trim_step}
+    is_train: false
   -
     type: LoadAnnotations3D
     with_bbox_3d: true

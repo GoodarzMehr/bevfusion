@@ -3,6 +3,8 @@ import os
 import numpy as np
 import torch
 
+import mmcv
+
 __all__ = ["load_augmented_point_cloud", "reduce_LiDAR_beams"]
 
 
@@ -105,3 +107,66 @@ def reduce_LiDAR_beams(pts, reduce_beams_to=32):
     # print(points.size())
     return points.numpy()
 
+
+def load_points(lidar_path):
+    '''
+    Load point cloud data from file.
+
+    Args:
+        lidar_path: path to the point cloud file.
+
+    Returns:
+        points: array of point cloud data.
+    '''
+    mmcv.check_file_exist(lidar_path)
+    
+    if lidar_path.endswith('.npz'):
+        points = np.load(lidar_path)['data']
+    else:
+        points = np.load(lidar_path)
+
+    return points
+
+
+def trim_points(points, trim_step):
+    '''
+    Trim point cloud data based on the provided trim step.
+
+    Args:
+        points: array of point cloud data.
+        trim_step: channel step size for trimming the point cloud.
+
+    Returns:
+        points: trimmed array of point cloud data.
+    '''
+    # Calculate beam angles.
+    angles = np.arctan(points[:, 2] / np.linalg.norm(points[:, :2], axis=1))
+    angles = np.trunc(angles * 1000.0) / 1000.0
+
+    unique_angles = np.sort(np.unique(angles))
+
+    # Some beams may have duplicate corresponding angles due to truncation,
+    # e.g. 0.186 and 0.187. For each set, take one angle as the representative
+    # and replace all other duplicates with that one.
+    channels = []
+    extras = []
+
+    for angle in unique_angles:
+        if len(channels) == 0:
+            channels.append(angle)
+        elif abs(np.array(channels) - angle).min() < 0.0015:
+            extras.append(angle)
+        else:
+            channels.append(angle)
+    
+    for extra in extras:
+        angles[angles == extra] = channels[np.abs(np.array(channels) - extra).argmin()]
+    
+    # Trim the point cloud based on the provided trim step.
+    lidar_angles = np.sort(np.array(channels))[::trim_step]
+
+    mask = np.isin(angles, lidar_angles)
+
+    trimmed_points = points[mask]
+
+    return trimmed_points

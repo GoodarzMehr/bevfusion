@@ -48,6 +48,8 @@ class SimBEVDataset(Dataset):
         use_valid_flag: whether to filter out invalid objects from each
             sample.
         load_interval: interval for loading data samples.
+        max_num_sweeps: maximum number of lidar sweeps to load for each
+            sample.
         box_type_3d: type of 3D box used in the dataset, indicating the
             coordinate system of the 3D box. Can be 'LiDAR', 'Depth', or
             'Camera'.
@@ -68,6 +70,7 @@ class SimBEVDataset(Dataset):
         with_velocity=True,
         use_valid_flag=False,
         load_interval=20,
+        max_num_sweeps=10,
         box_type_3d='LiDAR',
         det_eval_mode='iou'
     ):
@@ -82,6 +85,7 @@ class SimBEVDataset(Dataset):
         self.with_velocity = with_velocity
         self.use_valid_flag = use_valid_flag
         self.load_interval = load_interval
+        self.max_num_sweeps = max_num_sweeps
 
         self.box_type_3d, self.box_mode_3d = get_box_type(box_type_3d)
 
@@ -190,6 +194,8 @@ class SimBEVDataset(Dataset):
         for key in annotations['data']:
             data_infos += annotations['data'][key]['scene_data']
         
+        self.full_infos = data_infos
+        
         data_infos = data_infos[::self.load_interval]
 
         self.metadata = annotations['metadata']
@@ -241,6 +247,10 @@ class SimBEVDataset(Dataset):
 
             global2lidar = np.linalg.inv(ego2global @ lidar2ego)
 
+            global2lidarrot = np.eye(4).astype(np.float32)
+            
+            global2lidarrot[:3, :3] = global2lidar[:3, :3]
+
             # Transform bounding boxes from the global coordinate system to
             # the lidar coordinate system.
             for det_object in gt_det:
@@ -266,7 +276,9 @@ class SimBEVDataset(Dataset):
 
                         gt_boxes.append(center)
                         gt_names.append(OBJECT_CLASSES[tag])
-                        gt_velocities.append(det_object['linear_velocity'][:2])
+                        gt_velocities.append(
+                            (global2lidarrot @ np.append(det_object['linear_velocity'], [1]))[:2].tolist()
+                        )
                         
                         num_lidar_pts.append(det_object['num_lidar_pts'])
                         num_radar_pts.append(det_object['num_radar_pts'])
@@ -302,7 +314,9 @@ class SimBEVDataset(Dataset):
             timestamp = info['timestamp'],
             gt_seg_path = info['GT_SEG'],
             gt_det_path = info['GT_DET'],
-            lidar_path = info['LIDAR']
+            lidar_path = info['LIDAR'],
+            sweeps_lidar_paths = [],
+            sweeps_ego2global = []
         )
 
         # Ego to global transformation.
@@ -320,6 +334,19 @@ class SimBEVDataset(Dataset):
         lidar2ego[:3, 3] = self.metadata['LIDAR']['sensor2ego_translation']
         
         data['lidar2ego'] = lidar2ego
+
+        for i in range(self.max_num_sweeps):
+            if info['frame'] - (i + 1) >= 0:
+                sweep_info = self.full_infos[self.load_interval * index - (i + 1)]
+
+                data['sweeps_lidar_paths'].append(sweep_info['LIDAR'])
+
+                ego2global = np.eye(4).astype(np.float32)
+        
+                ego2global[:3, :3] = Q(sweep_info['ego2global_rotation']).rotation_matrix
+                ego2global[:3, 3] = sweep_info['ego2global_translation']
+
+                data['sweeps_ego2global'].append(ego2global)
 
         if self.modality['use_camera']:
             data['image_paths'] = []
