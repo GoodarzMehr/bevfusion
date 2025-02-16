@@ -109,7 +109,7 @@ model:
 
 optimizer:
   type: AdamW
-  lr: 3.0e-5
+  lr: 1.0e-4
   weight_decay: 0.01
   paramwise_cfg:
     custom_keys:
@@ -125,7 +125,6 @@ optimizer_config:
 
 lr_config:
   policy: cyclic
-  target_ratio: 4.0
 
 momentum_config:
   policy: cyclic
