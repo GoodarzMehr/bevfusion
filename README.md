@@ -122,14 +122,102 @@ Or, to visualize the BEVFusion BEV segmentation model predictions, run
 torchpack dist-run -np 8 python tools/visualize.py configs/simbev/seg/fusion-bev256d2-lss.yaml --mode pred-simbev --checkpoint pretrained/simbev-bevfusion-seg.pth --split test --map-score 0.5 --out-dir 'viz/bevfusion-seg'
 ```
 
-<!--
+
 ## Results
 
-The following table shows the IoU values of the lidar-camera model for different classes at three different thresholds.
+### 3D Object Detection
 
-| Threshold | Road | Car | Truck | Pedestrian |
-| :-------: | :--: | :-: | :---: | :--------: |
-| 0.3 | 92.6 | 74.7 | 79.1 | 28.1 |
-| 0.5 | 92.7 | 76.2 | 83.3 | 27.4 |
-| 0.7 | 92.4 | 75.5 | 82.9 | 11.8 |
--->
+#### Camera-only
+
+| Class      | AP (%) | ATE (m) | AOE (rad) |   ASE | AVE (m/s) |
+| :--------: | :----: | :-----: | :-------: | :---: | :-------: |
+| Car        |   19.4 |   0.931 |      1.61 | 0.214 |      4.99 |
+| Truck      |   17.5 |   0.855 |      1.51 | 0.191 |      6.18 |
+| Bus        |   17.1 |   0.974 |      1.50 | 0.028 |      5.70 |
+| Motorcycle |   24.7 |   0.663 |      1.41 | 0.140 |      6.54 |
+| Bicycle    |   22.7 |   0.714 |      1.30 | 0.226 |      4.68 |
+| Pedestrian |   15.5 |   0.966 |      1.53 | 0.074 |      1.12 |
+| mean       |   19.5 |   0.850 |      1.48 | 0.146 |      4.87 |
+
+SDS: 22.3% / [Checkpoint](https://drive.google.com/file/d/1y5iN_6XNDjGVVHjgDSQ14yPWW6NXRK29/view?usp=sharing)
+
+#### Lidar-only
+
+| Class      | AP (%) | ATE (m) | AOE (rad) |   ASE | AVE (m/s) |
+| :--------: | :----: | :-----: | :-------: | :---: | :-------: |
+| Car        |   44.5 |   0.175 |     0.131 | 0.138 |      1.43 |
+| Truck      |   38.3 |   0.244 |     0.113 | 0.177 |      1.89 |
+| Bus        |   34.1 |   0.212 |     0.058 | 0.058 |      2.25 |
+| Motorcycle |   51.5 |   0.156 |     0.133 | 0.193 |      2.03 |
+| Bicycle    |   55.5 |   0.132 |     0.103 | 0.212 |      1.66 |
+| Pedestrian |   51.7 |   0.158 |     0.465 | 0.077 |      0.54 |
+| mean       |   45.9 |   0.179 |     0.167 | 0.143 |      1.63 |
+
+
+SDS: 54.4% / [Checkpoint](https://drive.google.com/file/d/1XJz-adjQW4VhBKlZ5pBEWsXxcOwKJuT-/view?usp=sharing)
+
+#### Lidar-Camera
+
+| Class      | AP (%) | ATE (m) | AOE (rad) |   ASE | AVE (m/s) |
+| :--------: | :----: | :-----: | :-------: | :---: | :-------: |
+| Car        |   44.6 |   0.171 |     0.126 | 0.132 |      1.31 |
+| Truck      |   38.1 |   0.227 |     0.092 | 0.158 |      1.76 |
+| Bus        |   34.3 |   0.203 |     0.043 | 0.062 |      1.99 |
+| Motorcycle |   50.7 |   0.141 |     0.133 | 0.172 |      1.77 |
+| Bicycle    |   55.9 |   0.124 |     0.106 | 0.203 |      1.55 |
+| Pedestrian |   52.4 |   0.154 |     0.422 | 0.074 |      0.49 |
+| mean       |   46.0 |   0.170 |     0.153 | 0.134 |      1.48 |
+
+SDS: 54.8% / [Checkpoint](https://drive.google.com/file/d/14_ld7qbDlrWs7HeYVhJn3i_fjBPRy2CV/view?usp=sharing)
+
+### BEV Segmentation
+
+Results are provided for different IoU thresholds.
+
+#### Camera-only
+
+| Class      |  0.1 |  0.2 |  0.3 |  0.4 |  0.5 |  0.6 |  0.7 |  0.8 |  0.9 |
+| :--------: | :--: | :--: | :--: | :--: | :--: | :--: | :--: | :--: | :--: |
+| road       | 50.6 | 61.4 | 67.8 | 72.2 | 74.2 | 72.8 | 68.6 | 62.8 | 53.4 |
+| car        |  2.6 |  5.2 | 14.6 | 16.2 | 13.3 | 10.4 |  9.2 |  7.8 |  5.1 |
+| truck      |  1.1 |  2.8 |  1.0 |  0.0 |  0.0 |  0.0 |  0.0 |  0.0 |  0.0 |
+| bus        |  0.4 |  2.2 |  5.3 |  6.1 |  1.4 |  0.0 |  0.0 |  0.0 |  0.0 |
+| motorcycle |  0.1 |  0.0 |  0.0 |  0.0 |  0.0 |  0.0 |  0.0 |  0.0 |  0.0 |
+| bicycle    |  0.0 |  0.0 |  0.0 |  0.0 |  0.0 |  0.0 |  0.0 |  0.0 |  0.0 |
+| rider      |  0.2 |  0.0 |  0.0 |  0.0 |  0.0 |  0.0 |  0.0 |  0.0 |  0.0 |
+| pedestrian |  0.1 |  0.0 |  0.0 |  0.0 |  0.0 |  0.0 |  0.0 |  0.0 |  0.0 |
+| mIoU       |  6.9 |  8.9 | 11.1 | 11.8 | 11.1 | 10.4 |  9.7 |  8.8 |  7.3 |
+
+[Checkpoint](https://drive.google.com/file/d/1M17nZ-jn1Z2aUoaJxuUA9RXTPtLQb6Rq/view?usp=sharing)
+
+#### Lidar-only
+
+| IoU        | 0.1  | 0.2  | 0.3  | 0.4  | 0.5  | 0.6  | 0.7  | 0.8  | 0.9  |
+| :--------: | :--: | :--: | :--: | :--: | :--: | :--: | :--: | :--: | :--: |
+| road       | 44.0 | 52.6 | 62.1 | 82.9 | 86.2 | 86.0 | 83.4 | 78.8 | 70.6 |
+| car        |  4.7 | 34.0 | 54.4 | 65.8 | 68.0 | 59.5 | 46.4 | 31.3 | 13.0 |
+| truck      |  9.3 | 41.6 | 57.1 | 66.1 | 68.6 | 61.8 | 48.9 | 30.6 |  8.4 |
+| bus        | 13.0 | 49.4 | 65.1 | 73.9 | 76.9 | 72.2 | 62.9 | 51.1 | 33.5 |
+| motorcycle |  4.1 | 11.8 | 21.1 | 28.6 | 23.6 |  9.0 |  0.4 |  0.0 |  0.0 |
+| bicycle    |  1.4 |  4.1 |  8.7 | 10.0 |  3.1 |  0.0 |  0.0 |  0.0 |  0.0 |
+| rider      |  4.0 | 10.3 | 18.3 | 24.7 | 12.5 |  0.6 |  0.0 |  0.0 |  0.0 |
+| pedestrian |  2.9 |  8.4 | 16.0 | 25.2 | 11.6 |  0.0 |  0.0 |  0.0 |  0.0 |
+| mIoU       | 10.4 | 26.5 | 37.8 | 47.2 | 43.8 | 36.2 | 30.3 | 24.0 | 15.7 |
+
+[Checkpoint](https://drive.google.com/file/d/1tLg2b5ucOm6RKDIboxHOdnvOpgQTgcgF/view?usp=sharing)
+
+#### Camera-Lidar
+
+| IoU        | 0.1  | 0.2  | 0.3  | 0.4  | 0.5  | 0.6  | 0.7  | 0.8  | 0.9  |
+| :--------: | :--: | :--: | :--: | :--: | :--: | :--: | :--: | :--: | :--: |
+| road       | 48.7 | 61.5 | 72.8 | 81.5 | 86.5 | 86.2 | 83.4 | 79.0 | 71.0 |
+| car        |  7.7 | 33.5 | 54.0 | 66.0 | 68.9 | 61.1 | 48.6 | 32.0 | 13.0 |
+| truck      |  7.9 | 39.6 | 56.2 | 65.3 | 67.5 | 61.1 | 47.5 | 29.4 |  7.8 |
+| bus        | 15.3 | 50.6 | 67.5 | 76.3 | 78.3 | 74.1 | 64.3 | 51.8 | 32.9 |
+| motorcycle |  3.9 | 11.4 | 20.6 | 28.1 | 23.4 |  6.8 |  0.3 |  0.0 |  0.0 |
+| bicycle    |  1.3 |  3.8 |  6.9 |  8.0 |  1.3 |  0.0 |  0.0 |  0.0 |  0.0 |
+| rider      |  3.7 |  9.4 | 17.5 | 25.3 | 14.3 |  0.6 |  0.0 |  0.0 |  0.0 |
+| pedestrian |  2.8 |  8.2 | 15.7 | 24.9 | 10.7 |  0.1 |  0.0 |  0.0 |  0.0 |
+| mIoU       | 11.4 | 27.2 | 38.9 | 46.9 | 43.9 | 36.3 | 30.5 | 24.0 | 15.6 |
+
+[Checkpoint](https://drive.google.com/file/d/1r30cHo4NOsz-RKONZDtHM9btH4oVSaUt/view?usp=sharing)
