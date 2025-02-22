@@ -12,7 +12,9 @@ build/
 develop-eggs/
 dist/
 runs/
+runs.*/
 viz/
+viz.*/
 video/
 downloads/
 eggs/
