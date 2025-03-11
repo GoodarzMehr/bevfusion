@@ -266,8 +266,8 @@ class TransFusionHead(nn.Module):
         elif self.test_cfg["dataset"] == "SimBEV":
             local_max[
                 :,
-                2,
-            ] = F.max_pool2d(heatmap[:, 2], kernel_size=1, stride=1, padding=0)
+                0,
+            ] = F.max_pool2d(heatmap[:, 0], kernel_size=1, stride=1, padding=0)
         heatmap = heatmap * (heatmap == local_max)
         heatmap = heatmap.view(batch_size, heatmap.shape[1], -1)
 
@@ -784,8 +784,8 @@ class TransFusionHead(nn.Module):
                 ]
             elif self.test_cfg["dataset"] == "SimBEV":
                 self.tasks = [
-                    dict(num_class=7, class_names=[], indices=[0, 1, 3, 4, 5, 6, 7], radius=-1),
-                    dict(num_class=1, class_names=["Pedestrian"], indices=[2], radius=0.4),
+                    dict(num_class=5, class_names=[], indices=[1, 2, 3, 4, 5], radius=-1),
+                    dict(num_class=1, class_names=["Pedestrian"], indices=[0], radius=0.4),
                 ]
 
             ret_layer = []
