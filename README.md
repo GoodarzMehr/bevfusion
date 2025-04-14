@@ -130,13 +130,13 @@ torchpack dist-run -np 8 python tools/visualize.py configs/simbev/seg/fusion-bev
 
 | Class      | AP (%) | ATE (m) | AOE (rad) |   ASE | AVE (m/s) |
 | :--------: | :----: | :-----: | :-------: | :---: | :-------: |
-| Car        |   23.3 |   0.824 |      0.90 | 0.217 |      4.95 |
-| Truck      |   20.4 |   0.751 |      0.70 | 0.148 |      5.55 |
-| Bus        |   18.7 |   0.829 |      1.19 | 0.022 |      5.54 |
-| Motorcycle |   26.5 |   0.604 |      0.84 | 0.140 |      6.64 |
-| Bicycle    |   25.1 |   0.574 |      1.12 | 0.219 |      4.12 |
-| Pedestrian |   18.9 |   0.883 |      1.52 | 0.073 |      1.10 |
-| mean       |   22.1 |   0.744 |      1.04 | 0.137 |      4.65 |
+| Car        |   23.3 |   0.824 |     0.896 | 0.217 |      4.95 |
+| Truck      |   20.4 |   0.751 |     0.695 | 0.148 |      5.55 |
+| Bus        |   18.7 |   0.829 |     1.185 | 0.022 |      5.54 |
+| Motorcycle |   26.5 |   0.604 |     0.841 | 0.140 |      6.64 |
+| Bicycle    |   25.1 |   0.574 |     1.117 | 0.219 |      4.12 |
+| Pedestrian |   18.9 |   0.883 |     1.529 | 0.073 |      1.10 |
+| mean       |   22.1 |   0.744 |     1.044 | 0.137 |      4.65 |
 
 SDS: 25.1% / [Checkpoint](https://drive.google.com/file/d/1pV8-peIEbnhRogjyXD4skVt-ZoCo_4yq)
 
