@@ -1,3 +1,5 @@
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/simbev-a-synthetic-multi-task-multi-sensor/bev-segmentation-on-simbev)](https://paperswithcode.com/sota/bev-segmentation-on-simbev?p=simbev-a-synthetic-multi-task-multi-sensor)
+
 # BEVFusion in CARLA
 
 ![demo](assets/BEVFusion.gif)
