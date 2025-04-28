@@ -25,7 +25,7 @@
 # This script performs all the necessary steps for creating a BEVFusion Docker
 # image.
 #
-# The base Docker image is Ubuntu 20.04 with CUDA 11.3. If you want to use a
+# The base Docker image is Ubuntu 20.04 with CUDA 11.8. If you want to use a
 # different base image, you may need to modify "ubuntu2004/x86_64" when
 # fetching keys, based on your Ubuntu release and system architecture.
 
@@ -91,8 +91,12 @@ mmcv==1.4.0 mmcv-full==1.4.0 mmdet==2.20.0 mpi4py==3.0.3 numba==0.48.0 numpy==1.
 yapf==0.40.1 mkl==2022.1.0 mkl-include==2022.1.0 astunparse nuscenes-devkit tqdm torchpack matplotlib opencv-python \
 open3d ninja dataclasses -f https://download.pytorch.org/whl/torch_stable.html
 
+# Uninstall MMCV and PyTorch.
+
 RUN pip uninstall mmcv mmcv-full -y
 RUN pip uninstall torch torchvision torchaudio -y
+
+# Build and install PyTorch from source.
 
 WORKDIR /opt
 
@@ -107,6 +111,8 @@ RUN FORCE_CUDA=1 python setup.py develop
 
 WORKDIR /opt
 
+# Build and install TorchVision from source.
+
 RUN git clone --recursive --branch v0.12.0 https://github.com/pytorch/vision.git
 
 WORKDIR /opt/vision
@@ -116,8 +122,12 @@ RUN FORCE_CUDA=1 python setup.py develop
 
 WORKDIR /home
 
+# Install MMCV.
+
 RUN MMCV_WITH_OPS=1 FORCE_CUDA=1 pip install \
 --no-cache-dir "git+https://github.com/GoodarzMehr/mmcv.git@bevfusion-from-1.4.0"
+
+# Install PyTorch3D.
 
 RUN FORCE_CUDA=1 pip install --no-cache-dir "git+https://github.com/facebookresearch/pytorch3d.git@v0.7.4"
 
