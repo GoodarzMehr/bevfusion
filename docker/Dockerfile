@@ -59,7 +59,7 @@
 #
 # python setup.py develop
 
-FROM nvidia/cuda:11.3.1-devel-ubuntu20.04
+FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04
 
 # Define build arguments and environment variables.
 
@@ -68,7 +68,10 @@ ARG USER=bf
 ENV USER=${USER}
 ENV TZ=America/New_York
 ENV DEBIAN_FRONTEND=noninteractive
-ENV TORCH_CUDA_ARCH_LIST="Kepler;Kepler+Tesla;Maxwell;Maxwell+Tegra;Pascal;Volta;Turing;Ampere"
+ENV TORCH_CUDA_ARCH_LIST="Maxwell;Maxwell+Tegra;Pascal;Volta;Turing;Ampere;Ada;Hopper"
+ENV WITH_CUDA=1
+ENV USE_CUDA=1
+ENV USE_CUDNN=1
 
 # Add new user and install prerequisite packages.
 
@@ -81,15 +84,41 @@ RUN set -xue && apt-key del 7fa2af80 \
 && apt update \
 && apt install -y build-essential cmake debhelper git wget libsdl2-2.0-0 libsm6 libgl1-mesa-glx libomp5 pip unzip \
 libjpeg8 libtiff5 software-properties-common nano fontconfig g++ gcc libglib2.0-0 openmpi-bin openmpi-common \
-libopenmpi-dev libgtk2.0-dev libnvidia-gl-550 libnvidia-common-550 python-is-python3
+libopenmpi-dev libjpeg-dev libgtk2.0-dev libnvidia-gl-550 libnvidia-common-550 python-is-python3
 
-RUN pip install --no-cache-dir torch==1.10.1+cu113 torchvision==0.11.2+cu113 torchaudio==0.10.1 pillow==8.4.0 tqdm \
-torchpack mmcv==1.4.5 mmcv-full==1.4.5 mmdet==2.20.0 nuscenes-devkit mpi4py==3.0.3 numba==0.48.0 numpy==1.23.5 \
-yapf==0.40.1 matplotlib opencv-python open3d ninja -f https://download.pytorch.org/whl/torch_stable.html
+RUN pip install --no-cache-dir torch==1.10.1+cu113 torchvision==0.11.2+cu113 torchaudio==0.10.1 pillow==8.4.0 \
+mmcv==1.4.0 mmcv-full==1.4.0 mmdet==2.20.0 mpi4py==3.0.3 numba==0.48.0 numpy==1.23.5 cmake==3.22.6 future==0.18.2 \
+yapf==0.40.1 mkl==2022.1.0 mkl-include==2022.1.0 astunparse nuscenes-devkit tqdm torchpack matplotlib opencv-python \
+open3d ninja dataclasses -f https://download.pytorch.org/whl/torch_stable.html
 
 RUN pip uninstall mmcv mmcv-full -y
-RUN MMCV_WITH_OPS=1 FORCE_CUDA=1 pip install --no-cache-dir mmcv==1.4.0 mmcv-full==1.4.0
+RUN pip uninstall torch torchvision torchaudio -y
 
-RUN FORCE_CUDA=1 pip install --no-cache-dir "git+https://github.com/facebookresearch/pytorch3d.git@v0.6.2"
+WORKDIR /opt
+
+RUN git clone --recursive --branch pytorch-from-1.11.0 https://github.com/GoodarzMehr/pytorch.git
+
+WORKDIR /opt/pytorch
+
+ENV CMAKE_PREFIX_PATH="$(dirname $(which python3))/../share/cmake"
+
+RUN FORCE_CUDA=1 python setup.py install
+RUN FORCE_CUDA=1 python setup.py develop
+
+WORKDIR /opt
+
+RUN git clone --recursive --branch v0.12.0 https://github.com/pytorch/vision.git
+
+WORKDIR /opt/vision
+
+RUN FORCE_CUDA=1 python setup.py install
+RUN FORCE_CUDA=1 python setup.py develop
+
+WORKDIR /home
+
+RUN MMCV_WITH_OPS=1 FORCE_CUDA=1 pip install \
+--no-cache-dir "git+https://github.com/GoodarzMehr/mmcv.git@bevfusion-from-1.4.0"
+
+RUN FORCE_CUDA=1 pip install --no-cache-dir "git+https://github.com/facebookresearch/pytorch3d.git@v0.7.4"
 
 USER ${USER}
