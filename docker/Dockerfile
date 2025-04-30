@@ -100,35 +100,35 @@ RUN pip uninstall torch torchvision torchaudio -y
 
 WORKDIR /opt
 
-RUN git clone --recursive --branch pytorch-from-1.11.0 https://github.com/GoodarzMehr/pytorch.git
+RUN git clone --recursive --branch pytorch-from-1.11.0-cuda-12.1 https://github.com/GoodarzMehr/pytorch.git
 
 WORKDIR /opt/pytorch
 
 ENV CMAKE_PREFIX_PATH="$(dirname $(which python3))/../share/cmake"
 
-# RUN FORCE_CUDA=1 python setup.py install
-# RUN FORCE_CUDA=1 python setup.py develop
+RUN FORCE_CUDA=1 python setup.py install
+RUN FORCE_CUDA=1 python setup.py develop
 
-# WORKDIR /opt
+WORKDIR /opt
 
-# # Build and install TorchVision from source.
+# Build and install TorchVision from source.
 
-# RUN git clone --recursive --branch v0.12.0 https://github.com/pytorch/vision.git
+RUN git clone --recursive --branch v0.12.0 https://github.com/pytorch/vision.git
 
-# WORKDIR /opt/vision
+WORKDIR /opt/vision
 
-# RUN FORCE_CUDA=1 python setup.py install
-# RUN FORCE_CUDA=1 python setup.py develop
+RUN FORCE_CUDA=1 python setup.py install
+RUN FORCE_CUDA=1 python setup.py develop
 
-# WORKDIR /home
+WORKDIR /home
 
-# # Install MMCV.
+# Install MMCV.
 
-# RUN MMCV_WITH_OPS=1 FORCE_CUDA=1 pip install \
-# --no-cache-dir "git+https://github.com/GoodarzMehr/mmcv.git@bevfusion-from-1.4.0"
+RUN MMCV_WITH_OPS=1 FORCE_CUDA=1 pip install \
+--no-cache-dir "git+https://github.com/GoodarzMehr/mmcv.git@bevfusion-from-1.4.0"
 
-# # Install PyTorch3D.
+# Install PyTorch3D.
 
-# RUN FORCE_CUDA=1 pip install --no-cache-dir "git+https://github.com/facebookresearch/pytorch3d.git@v0.7.4"
+RUN FORCE_CUDA=1 pip install --no-cache-dir "git+https://github.com/facebookresearch/pytorch3d.git@v0.7.4"
 
 USER ${USER}
