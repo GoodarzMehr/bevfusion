@@ -25,7 +25,7 @@
 # This script performs all the necessary steps for creating a BEVFusion Docker
 # image.
 #
-# The base Docker image is Ubuntu 20.04 with CUDA 11.8. If you want to use a
+# The base Docker image is Ubuntu 20.04 with CUDA 12.1. If you want to use a
 # different base image, you may need to modify "ubuntu2004/x86_64" when
 # fetching keys, based on your Ubuntu release and system architecture.
 
