@@ -518,14 +518,14 @@ class SimBEVDataset(Dataset):
         '''
         device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
 
-        thresholds = torch.tensor([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]).to(device)
+        thresholds = torch.tensor([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9], device=device)
 
         num_classes = len(self.map_classes)
         num_thresholds = len(thresholds)
 
-        tp = torch.zeros(num_classes, num_thresholds).to(device)
-        fp = torch.zeros(num_classes, num_thresholds).to(device)
-        fn = torch.zeros(num_classes, num_thresholds).to(device)
+        tp = torch.zeros(num_classes, num_thresholds, device=device)
+        fp = torch.zeros(num_classes, num_thresholds, device=device)
+        fn = torch.zeros(num_classes, num_thresholds, device=device)
 
         for result in results:
             pred = result['masks_bev'].to(device)
@@ -758,9 +758,9 @@ class SimBEVDetectionEval:
                         # Calculate Intersection over Union (IoU) between
                         # predicted and ground truth bounding boxes.
                         if len(pred_box_corners) == 0:
-                            ious = torch.zeros((0, len(gt_box_corners))).to(device)
+                            ious = torch.zeros((0, len(gt_box_corners)), device=device)
                         elif len(gt_box_corners) == 0:
-                            ious = torch.zeros((len(pred_box_corners), 0)).to(device)
+                            ious = torch.zeros((len(pred_box_corners), 0), device=device)
                         else:
                             _, ious = box3d_overlap(pred_box_corners, gt_box_corners)
                     else:
@@ -770,7 +770,7 @@ class SimBEVDetectionEval:
 
                     # Tensor to keep track of ground truth boxes that have
                     # been assigned to a prediction.
-                    assigned_gt = torch.zeros(len(gt_boxes), dtype=torch.bool).to(device)
+                    assigned_gt = torch.zeros(len(gt_boxes), dtype=torch.bool, device=device)
 
                     tp = torch.zeros(len(pred_boxes))
                     fp = torch.zeros(len(pred_boxes))                  
@@ -894,8 +894,8 @@ class SimBEVDetectionEval:
                 tps[cls] = tps[cls][sorted_indices]
                 fps[cls] = fps[cls][sorted_indices]
 
-                tps[cls] = torch.cumsum(tps[cls], dim=0).to(torch.float32)
-                fps[cls] = torch.cumsum(fps[cls], dim=0).to(torch.float32)
+                tps[cls] = torch.cumsum(tps[cls], dim=0, dtype=torch.float32)
+                fps[cls] = torch.cumsum(fps[cls], dim=0, dtype=torch.float32)
 
                 recalls = tps[cls] / num_gt_boxes[cls]
                 precisions = tps[cls] / (tps[cls] + fps[cls])
