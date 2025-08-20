@@ -3,7 +3,7 @@ dataset_root: /dataset/nuscenes/
 gt_paste_stop_epoch: -1
 reduce_beams: 32
 load_dim: 5
-use_dim: 3
+use_dim: [0, 1, 2, 4]
 load_augmented: null
 
 point_cloud_range: [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
@@ -193,7 +193,7 @@ test_pipeline:
     load_augmented: ${load_augmented}
   -
     type: LoadPointsFromMultiSweeps
-    sweeps_num: 0
+    sweeps_num: 9
     load_dim: ${load_dim}
     use_dim: ${use_dim}
     reduce_beams: ${reduce_beams}
