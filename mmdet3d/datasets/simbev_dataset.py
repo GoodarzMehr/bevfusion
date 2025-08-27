@@ -520,12 +520,44 @@ class SimBEVDataset(Dataset):
 
         thresholds = torch.tensor([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9], device=device)
 
+        for transform in self.pipeline.transforms:
+            if hasattr(transform, 'DxDim'):
+                xDim = transform.DxDim
+            if hasattr(transform, 'xRes'):
+                xRes = transform.xRes
+
+        yDim = xDim
+        yRes = xRes
+
+        # Calculate the center-point coordinates of the BEV grid cells.
+        xLim = xDim * xRes / 2
+        yLim = yDim * yRes / 2
+        
+        cxLim = xLim - xRes / 2
+        cyLim = yLim - yRes / 2
+
+        x = torch.linspace(cxLim, -cxLim, xDim, device=device)
+        y = torch.linspace(cyLim, -cyLim, yDim, device=device)
+
+        xx, yy = torch.meshgrid(x, y, indexing='ij')
+
+        coordinates = torch.stack([xx, yy], dim=2).reshape(-1, 2)
+
+        distance = torch.linalg.norm(coordinates, dim=1)
+
+        masks = torch.zeros(distance.shape[0], 4, dtype=torch.bool, device=device)
+
+        masks[:, 0] = distance >= 0.0
+        masks[:, 1] = distance <= 20.0
+        masks[:, 2] = (distance <= 40.0) & (distance > 20.0)
+        masks[:, 3] = distance > 40.0
+
         num_classes = len(self.map_classes)
         num_thresholds = len(thresholds)
 
-        tp = torch.zeros(num_classes, num_thresholds, device=device)
-        fp = torch.zeros(num_classes, num_thresholds, device=device)
-        fn = torch.zeros(num_classes, num_thresholds, device=device)
+        tp = torch.zeros(num_classes, num_thresholds, 4, device=device)
+        fp = torch.zeros(num_classes, num_thresholds, 4, device=device)
+        fn = torch.zeros(num_classes, num_thresholds, 4, device=device)
 
         for result in results:
             pred = result['masks_bev'].to(device)
@@ -537,18 +569,21 @@ class SimBEVDataset(Dataset):
             pred = pred[:, :, None] >= thresholds
             label = label[:, :, None]
 
-            tp += (pred & label).sum(dim=1)
-            fp += (pred & ~label).sum(dim=1)
-            fn += (~pred & label).sum(dim=1)
+            for i in range(4):
+                mask_i = masks[:, i]
+                
+                tp[:, :, i] += (pred & label)[:, mask_i, :].sum(dim=1)
+                fp[:, :, i] += (pred & ~label)[:, mask_i, :].sum(dim=1)
+                fn[:, :, i] += (~pred & label)[:, mask_i, :].sum(dim=1)
 
         ious = tp / (tp + fp + fn + 1e-6)
         
         metrics = {}
         
         for index, name in enumerate(self.map_classes):
-            metrics[f'map/{name}/IoU@max'] = ious[index].max().item()
+            metrics[f'map/{name}/IoU@max'] = ious[index, :, 0].max().item()
             
-            for threshold, iou in zip(thresholds, ious[index]):
+            for threshold, iou in zip(thresholds, ious[index, :, 0]):
                 metrics[f'map/{name}/IoU@{threshold.item():.2f}'] = iou.item()
         
         metrics['map/mean/IoU@max'] = ious.max(dim=1).values.mean().item()
@@ -557,14 +592,18 @@ class SimBEVDataset(Dataset):
             metrics[f'map/mean/IoU@{threshold.item():.2f}'] = ious[:, index].mean().item()
         
         # Print IoU table.
-        print('\n\n')
+        table_headings = ['Overall IoUs', '0-20m', '20-40m', '>40m']
 
-        print(f'{"IoU":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
+        for i in range(4):
+            print(f'\n{"-" * 40} {table_headings[i]} {"-" * 40}')
+            print('\n\n')
 
-        for index, name in enumerate(self.map_classes):
-            print(f'{name:<12}', ''.join([f'{iou:<8.4f}' for iou in ious[index].tolist()]))
-        
-        print(f'{"mIoU":<12}', ''.join([f'{iou:<8.4f}' for iou in ious.mean(dim=0).tolist()]), '\n')
+            print(f'{"IoU":<12} {0.1:<8}{0.2:<8}{0.3:<8}{0.4:<8}{0.5:<8}{0.6:<8}{0.7:<8}{0.8:<8}{0.9:<8}')
+
+            for index, name in enumerate(self.map_classes):
+                print(f'{name:<12}', ''.join([f'{iou:<8.4f}' for iou in ious[index, :, i].tolist()]))
+
+            print(f'{"mIoU":<12}', ''.join([f'{iou:<8.4f}' for iou in ious[:, :, i].mean(dim=0).tolist()]), '\n')
         
         return metrics
     
