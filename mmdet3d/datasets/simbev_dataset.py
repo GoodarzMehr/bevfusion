@@ -559,9 +559,19 @@ class SimBEVDataset(Dataset):
         fp = torch.zeros(num_classes, num_thresholds, 4, device=device)
         fn = torch.zeros(num_classes, num_thresholds, 4, device=device)
 
+        confusion_matrix = torch.zeros(num_classes, num_classes, device=device)
+
         for result in results:
             pred = result['masks_bev'].to(device)
             label = result['gt_masks_bev'].to(device)
+
+            pred_labels = (pred >= 0.5)
+            
+            # Update the confusion matrix.
+            for gt_class in range(num_classes):
+                for pred_class in range(num_classes):
+                    confusion_matrix[gt_class, pred_class] += \
+                        ((label[gt_class] == 1) & (pred_labels[pred_class] == 1)).sum()
 
             pred = pred.detach().reshape(num_classes, -1)
             label = label.detach().bool().reshape(num_classes, -1)
@@ -604,6 +614,16 @@ class SimBEVDataset(Dataset):
                 print(f'{name:<12}', ''.join([f'{iou:<8.4f}' for iou in ious[index, :, i].tolist()]))
 
             print(f'{"mIoU":<12}', ''.join([f'{iou:<8.4f}' for iou in ious[:, :, i].mean(dim=0).tolist()]), '\n')
+        
+        print(f'\n{"-" * 40} {"Confusion Matrix"} {"-" * 40}')
+        print('\n\n')
+
+        print(f'{"":<12}', ''.join([f'{name:<12}' for name in self.map_classes]))
+
+        for index, name in enumerate(self.map_classes):
+            print(f'{name:<12}', ''.join([f'{confusion_matrix[index, j]:<12.0f}' for j in range(num_classes)]))
+        
+        print('\n\n')
         
         return metrics
     
