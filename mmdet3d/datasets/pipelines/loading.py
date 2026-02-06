@@ -5,8 +5,8 @@ import mmcv
 import torch
 import numpy as np
 import torch.nn.functional as F
-from nuscenes.map_expansion.map_api import NuScenesMap
-from nuscenes.map_expansion.map_api import locations as LOCATIONS
+# from nuscenes.map_expansion.map_api import NuScenesMap
+# from nuscenes.map_expansion.map_api import locations as LOCATIONS
 from PIL import Image
 
 
@@ -256,8 +256,8 @@ class LoadBEVSegmentation:
         self.classes = classes
 
         self.maps = {}
-        for location in LOCATIONS:
-            self.maps[location] = NuScenesMap(dataset_root, location)
+        # for location in LOCATIONS:
+        #     self.maps[location] = NuScenesMap(dataset_root, location)
 
     def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
         lidar2point = data["lidar_aug_matrix"]
