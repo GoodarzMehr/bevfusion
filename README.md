@@ -172,7 +172,7 @@ SDS: 79.8% / [Checkpoint](https://drive.google.com/file/d/1-xvt3JfoSsZqu0BMmg90M
 
 SDS: 79.9% / [Checkpoint](https://drive.google.com/file/d/1vZrYQ5tCAlo67jYGQ_4plNYBvctfi5Au)
 
-Original benchmarks.
+_Original benchmarks._
 
 #### Camera-only
 
