@@ -128,7 +128,7 @@ torchpack dist-run -np 8 python tools/visualize.py configs/simbev/seg/fusion-bev
 
 ### 3D Object Detection
 
-3D object detection benchmarks were revised after becoming aware of a flaw (SimBEV#14) in our evaluation method thanks to @qinlong2133. The original benchmarks are provided at the end for reference.
+3D object detection benchmarks were revised after becoming aware of a flaw [SimBEV#14](https://github.com/GoodarzMehr/SimBEV/issues/14) in our evaluation method thanks to [@qinlong2133](https://github.com/qinlong2133). The original benchmarks are provided at the end for reference.
 
 #### Camera-only
 
