@@ -16,10 +16,10 @@ BEVFusion requires the following libraries:
 * Python >= 3.8, \<3.9
 * OpenMPI = 4.0.3 and mpi4py = 3.0.3 (needed for torchpack)
 * Pillow = 8.4.0 (see [here](https://github.com/mit-han-lab/bevfusion/issues/63))
-* [PyTorch](https://github.com/pytorch/pytorch) >= 1.9, \<= 1.10.2
+* [PyTorch](https://github.com/pytorch/pytorch) = 1.11.0 ([this version](https://github.com/GoodarzMehr/pytorch/tree/pytorch-from-1.11.0-cuda-12.1-numpy-2.2.6) built from source with CUDA 12.1)
 * [tqdm](https://github.com/tqdm/tqdm)
 * [torchpack](https://github.com/mit-han-lab/torchpack)
-* [mmcv](https://github.com/open-mmlab/mmcv) = 1.4.0
+* [mmcv](https://github.com/open-mmlab/mmcv) = 1.4.0 ([this version](https://github.com/GoodarzMehr/mmcv/tree/bevfusion-from-1.4.0) built from source with CUDA 12.1)
 * [mmdetection](http://github.com/open-mmlab/mmdetection) = 2.20.0
 * [nuscenes-dev-kit](https://github.com/nutonomy/nuscenes-devkit)
 
@@ -38,7 +38,7 @@ to install the codebase.
 ```bash
 docker build --no-cache --rm -t bevfusion:develop .
 ```
-You may need to replace `libnvidia-gl-550` and `libnvidia-common-550` packages in the [Dockerfile](docker/Dockerfile) with ones that are compatible with your Nvidia driver version.
+You may need to replace `libnvidia-*-580` packages in the [Dockerfile](docker/Dockerfile) with ones that are compatible with your Nvidia driver version.
 
 The following build arguments (`ARG`) are available:
 * `USER`: username inside each container, set to `bf` by default.
