@@ -270,6 +270,7 @@ data:
     map_classes: ${map_classes}
     pipeline: ${test_pipeline}
     modality: ${input_modality}
+    point_cloud_range: ${point_cloud_range}
     test_mode: false
     box_type_3d: LiDAR
     det_eval_mode: distance
@@ -281,6 +282,7 @@ data:
     map_classes: ${map_classes}
     pipeline: ${test_pipeline}
     modality: ${input_modality}
+    point_cloud_range: ${point_cloud_range}
     test_mode: true
     box_type_3d: LiDAR
     det_eval_mode: distance

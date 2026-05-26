@@ -65,6 +65,7 @@ class SimBEVDataset(Dataset):
         map_classes=None,
         pipeline=None,
         modality=None,
+        point_cloud_range=None,
         test_mode=False,
         filter_empty_gt=True,
         with_velocity=True,
@@ -80,6 +81,7 @@ class SimBEVDataset(Dataset):
         self.object_classes = object_classes
         self.map_classes = map_classes
         self.modality = modality
+        self.point_cloud_range = point_cloud_range
         self.test_mode = test_mode
         self.filter_empty_gt = filter_empty_gt
         self.with_velocity = with_velocity
@@ -645,7 +647,7 @@ class SimBEVDataset(Dataset):
 
         # Evaluate 3D object detection results.
         if 'boxes_3d' in results[0]:
-            simbev_eval = SimBEVDetectionEval(results, self.object_classes, self.eval_mode)
+            simbev_eval = SimBEVDetectionEval(results, self.object_classes, self.eval_mode, self.point_cloud_range)
 
             metrics.update(simbev_eval.evaluate())
         
@@ -696,11 +698,13 @@ class SimBEVDetectionEval:
         results: results from the model.
         classes: list of object classes in the dataset.
         mode: evalution mode, can be 'iou' or 'distance'.
+        point_cloud_range: range of the point cloud.
     '''
-    def __init__(self, results, classes, mode='iou'):
+    def __init__(self, results, classes, mode='iou', point_cloud_range=None):
         self.results = results
         self.classes = classes
         self.mode = mode
+        self.point_cloud_range = point_cloud_range
 
         iou_thresholds = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
         distance_thresholds = [0.5, 1.0, 2.0, 4.0]
@@ -756,6 +760,14 @@ class SimBEVDetectionEval:
                 labels_3d = result['labels_3d']
                 gt_boxes_3d = result['gt_bboxes_3d']
                 gt_labels_3d = result['gt_labels_3d']
+
+                if self.point_cloud_range is not None:
+                    bev_range = np.array(self.point_cloud_range)[[0, 1, 3, 4]] # [x_min, y_min, x_max, y_max]
+                    
+                    in_range = gt_boxes_3d.in_range_bev(bev_range)
+                    
+                    gt_boxes_3d = gt_boxes_3d[in_range]
+                    gt_labels_3d = gt_labels_3d[in_range]
 
                 if self.mode == 'iou':
                     if len(boxes_3d.tensor) > 0:

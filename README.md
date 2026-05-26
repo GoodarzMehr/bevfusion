@@ -128,6 +128,52 @@ torchpack dist-run -np 8 python tools/visualize.py configs/simbev/seg/fusion-bev
 
 ### 3D Object Detection
 
+3D object detection benchmarks were revised after becoming aware of a flaw (SimBEV#14) in our evaluation method thanks to @qinlong2133. The original benchmarks are provided at the end for reference.
+
+#### Camera-only
+
+| Class      | AP (%) | ATE (m) | AOE (rad) |   ASE | AVE (m/s) |
+| :--------: | :----: | :-----: | :-------: | :---: | :-------: |
+| Car        |   46.7 |   0.780 |     0.880 | 0.214 |      4.99 |
+| Truck      |   44.1 |   0.737 |     0.689 | 0.147 |      5.52 |
+| Bus        |   53.6 |   0.808 |     1.202 | 0.021 |      5.52 |
+| Motorcycle |   46.9 |   0.589 |     0.839 | 0.140 |      6.61 |
+| Bicycle    |   43.7 |   0.567 |     1.119 | 0.219 |      4.12 |
+| Pedestrian |   31.2 |   0.842 |     1.536 | 0.071 |      1.10 |
+| mean       |   44.4 |   0.720 |     1.044 | 0.135 |      4.64 |
+
+SDS: 36.5% / [Checkpoint](https://drive.google.com/file/d/1pV8-peIEbnhRogjyXD4skVt-ZoCo_4yq)
+
+#### Lidar-only
+
+| Class      | AP (%) | ATE (m) | AOE (rad) |   ASE | AVE (m/s) |
+| :--------: | :----: | :-----: | :-------: | :---: | :-------: |
+| Car        |   96.6 |   0.152 |     0.104 | 0.127 |      1.42 |
+| Truck      |   95.1 |   0.159 |     0.044 | 0.110 |      1.75 |
+| Bus        |   94.2 |   0.169 |     0.049 | 0.072 |      2.40 |
+| Motorcycle |   89.4 |   0.114 |     0.118 | 0.159 |      1.79 |
+| Bicycle    |   94.2 |   0.113 |     0.086 | 0.213 |      1.53 |
+| Pedestrian |   97.2 |   0.102 |     0.366 | 0.104 |      0.44 |
+| mean       |   94.5 |   0.135 |     0.128 | 0.131 |      1.56 |
+
+SDS: 79.8% / [Checkpoint](https://drive.google.com/file/d/1-xvt3JfoSsZqu0BMmg90MnF8sxKWVvx-)
+
+#### Fused
+
+| Class      | AP (%) | ATE (m) | AOE (rad) |   ASE | AVE (m/s) |
+| :--------: | :----: | :-----: | :-------: | :---: | :-------: |
+| Car        |   96.8 |   0.151 |     0.102 | 0.125 |      1.38 |
+| Truck      |   95.3 |   0.166 |     0.048 | 0.106 |      1.74 |
+| Bus        |   94.7 |   0.176 |     0.040 | 0.063 |      2.44 |
+| Motorcycle |   88.9 |   0.113 |     0.104 | 0.153 |      1.65 |
+| Bicycle    |   93.6 |   0.113 |     0.074 | 0.207 |      1.52 |
+| Pedestrian |   97.3 |   0.102 |     0.333 | 0.094 |      0.44 |
+| mean       |   94.4 |   0.137 |     0.117 | 0.125 |      1.53 |
+
+SDS: 79.9% / [Checkpoint](https://drive.google.com/file/d/1vZrYQ5tCAlo67jYGQ_4plNYBvctfi5Au)
+
+Original benchmarks.
+
 #### Camera-only
 
 | Class      | AP (%) | ATE (m) | AOE (rad) |   ASE | AVE (m/s) |
@@ -156,7 +202,7 @@ SDS: 25.1% / [Checkpoint](https://drive.google.com/file/d/1pV8-peIEbnhRogjyXD4sk
 
 SDS: 56.4% / [Checkpoint](https://drive.google.com/file/d/1-xvt3JfoSsZqu0BMmg90MnF8sxKWVvx-)
 
-#### Lidar-Camera
+#### Fused
 
 | Class      | AP (%) | ATE (m) | AOE (rad) |   ASE | AVE (m/s) |
 | :--------: | :----: | :-----: | :-------: | :---: | :-------: |
@@ -206,7 +252,7 @@ Results are provided for different IoU thresholds.
 
 [Checkpoint](https://drive.google.com/file/d/1ga4B6-C45hWVMUTv0CpGjs6kG5cD6aW9)
 
-#### Camera-Lidar
+#### Fused
 
 | IoU        | 0.1  | 0.2  | 0.3  | 0.4  | 0.5  | 0.6  | 0.7  | 0.8  | 0.9  |
 | :--------: | :--: | :--: | :--: | :--: | :--: | :--: | :--: | :--: | :--: |
